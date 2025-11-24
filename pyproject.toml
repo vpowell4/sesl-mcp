@@ -5,7 +5,7 @@ requires-python = ">=3.10"
 
 dependencies = [
     "fastmcp",
-    "sesl @ git+https://${GITHUB_PAT}:x-oauth-basic@github.com/vpowell4/sesl.git@main",
+    "sesl @ git+https://github.com/vpowell4/sesl.git@main",
 ]
 
 [project.scripts]
