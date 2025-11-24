@@ -1,4 +1,3 @@
-
 import json
 import yaml
 import traceback
@@ -15,6 +14,17 @@ from sesl.engine.rule_engine import (
     Monitor,
 )
 from sesl.tools.linter_core import lint_model_from_yaml
+
+
+# ============================================================
+# HELPER: format_error
+# ============================================================
+def format_error(e: BaseException) -> str:
+    """
+    Return a concise, readable error string.
+    """
+    # You can make this shorter if you don't want type names.
+    return f"{type(e).__name__}: {e}"
 
 
 # ============================================================
@@ -59,11 +69,11 @@ Valid condition forms:
 Simple: user.age > 18, status == "ACTIVE", country in ["US","CA"], role not in ["admin","owner"].
 Nested logic:
 if:
-all:
-user.age > 18
-any:
-score > 700
-status == "VIP"
+  all:
+    user.age > 18
+  any:
+    score > 700
+    status == "VIP"
 Logic keys: all or and, any or or, not.
 Operand Resolution Rules
 String literals are quoted. true and false are booleans. Numbers without quotes are numeric.
@@ -88,7 +98,7 @@ rule: AdultCheck
 priority: 10
 if: user.age >= 18
 then:
-is_adult: true
+  is_adult: true
 because: "User is 18 or older"
 You must follow all rules above exactly when generating SESL.
 Facts
@@ -99,24 +109,25 @@ Each fact is a YAML dictionary representing one evaluation context.
 Missing dotted-path fields automatically resolve to None. Facts may contain nested structures, lists, numbers, booleans, and strings.
 Example structure:
 facts:
-user:
-age: 25
-country: "US"
-status: "ACTIVE"
-user:
-age: 16
-country: "CA"
-status: "INACTIVE"
+  - user:
+      age: 25
+      country: "US"
+      status: "ACTIVE"
+  - user:
+      age: 16
+      country: "CA"
+      status: "INACTIVE"
 Facts should include only fields referenced by rules or LET variables. The model must output a facts block only when explicitly requested.
 In SESL, a scenario is one item inside the facts: block.
 A scenario represents one complete input dataset used to test rule evaluation.
 A scenario defines the values of all fields that may be referenced by:
-rule conditions
-LET variables
-operand lookups
-dotted-path expressions (user.age, account.balance, etc.)
+  rule conditions
+  LET variables
+  operand lookups
+  dotted-path expressions (user.age, account.balance, etc.)
 
 """
+
 
 # ============================================================
 # TOOL 2: lint_sesl
@@ -193,14 +204,14 @@ async def run_sesl(
             core = {"rules": [], "facts": [runtime]}
 
             for r in rules:
-                entry = {"rule": r.name}
+                entry: Dict[str, Any] = {"rule": r.name}
                 if getattr(r, "conditions", None):
                     entry["if"] = r.conditions
                 if getattr(r, "actions", None):
                     entry["then"] = r.actions
                 if getattr(r, "because", None):
                     entry["because"] = r.because
-                if getattr(r, "priority", None):
+                if getattr(r, "priority", None) is not None:
                     entry["priority"] = r.priority
                 if getattr(r, "lets", None):
                     entry["let"] = {k: "(compiled)" for k in r.lets}
@@ -260,7 +271,6 @@ def main():
         host="0.0.0.0",
         port=3000,
     )
-
 
 
 if __name__ == "__main__":
