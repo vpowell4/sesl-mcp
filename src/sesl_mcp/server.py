@@ -73,6 +73,20 @@ def format_error(e: BaseException) -> str:
 
 
 # ============================================================
+# JSON FALLBACK FIX (IMPORTANT)
+# ============================================================
+
+def _json_fallback(obj: Any):
+    """
+    JSON serializer for objects not supported by default json.dumps.
+    Converts sets to lists; unknown objects to strings.
+    """
+    if isinstance(obj, set):
+        return sorted(list(obj))
+    return str(obj)
+
+
+# ============================================================
 # HELPER: TextContent factories
 # ============================================================
 
@@ -80,11 +94,14 @@ def make_text_content(payload: Any) -> TextContent:
     """
     Wrap a Python object (dict, list, str, etc.) into a JSON-encoded TextContent.
     Always returns a valid TextContent for MCP (type='text').
+
+    *** FIXED: now serializes sets safely ***
     """
     if isinstance(payload, str):
         text = payload
     else:
-        text = json.dumps(payload, indent=2)
+        text = json.dumps(payload, indent=2, default=_json_fallback)
+
     return TextContent(type="text", text=text)
 
 
@@ -124,12 +141,10 @@ async def generate_sesl(prompt: str) -> str:
     """
     logger.info("generate_sesl called with prompt: %r", prompt)
 
-    # Use the external template file and inject the user prompt.
     try:
         return PROMPT_TEMPLATE.format(prompt=prompt)
     except Exception as e:
         logger.exception("Failed to format SESL prompt template")
-        # Fallback to a minimal instruction if the template is malformed
         return f"Generate SESL code for the prompt: {prompt}"
 
 
@@ -141,18 +156,7 @@ async def generate_sesl(prompt: str) -> str:
 async def lint_sesl(contents: List[TextContent]) -> List[TextContent]:
     """
     Lint SESL YAML content.
-
-    `contents` is a list of TextContent segments that will be concatenated.
-
-    Returns a single TextContent with JSON:
-    {
-      "issues": [
-        { "level": "...", "message": "...", "rule": "..." },
-        ...
-      ]
-    }
     """
-
     raw = "".join(c.text for c in contents)
     logger.info("lint_sesl called")
     logger.debug("lint_sesl input YAML: %r", raw)
@@ -195,53 +199,31 @@ async def lint_sesl(contents: List[TextContent]) -> List[TextContent]:
 
 def _normalize_facts_input(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Normalize the 'facts' parameter into a flat dict representing a single scenario.
-
-    Supports a few flexible shapes:
-
-    - None / {}                 -> {}
-    - {"facts": [ {...}, ... ]} -> first element
-    - {"scenarios": [ {...}, ... ]} -> first element
-    - {"scenario1": {...}, "scenario2": {...}} -> first scenario dict
-    - [ {...}, ... ]            -> first element
-    - {"x": 1, "y": 2}          -> used as-is
-
-    This allows clients to send:
-      facts={ "temperature": 31 }
-    or
-      facts={ "scenarios": [ { "temperature": 31 }, { "temperature": 15 } ] }
-    or
-      facts={ "scenario1": { "user": {...} }, "scenario2": { "user": {...} } }
+    Normalize the 'facts' parameter into a flat dict representing one scenario.
     """
     if not facts:
         return {}
 
-    # Envelope with 'facts' list
     if isinstance(facts, dict) and "facts" in facts:
         candidate = facts["facts"]
         if isinstance(candidate, list) and candidate and isinstance(candidate[0], dict):
             return candidate[0]
 
-    # Envelope with 'scenarios' list
     if isinstance(facts, dict) and "scenarios" in facts:
         candidate = facts["scenarios"]
         if isinstance(candidate, list) and candidate and isinstance(candidate[0], dict):
             return candidate[0]
 
-    # Top-level list of scenarios
     if isinstance(facts, list) and facts and isinstance(facts[0], dict):
         return facts[0]
 
-    # Dict where every value is a dict -> treat as multiple named scenarios
     if isinstance(facts, dict) and facts and all(isinstance(v, dict) for v in facts.values()):
         first_key = next(iter(facts))
         return facts[first_key]
 
-    # Otherwise assume it's already a single scenario dict
     if isinstance(facts, dict):
         return facts
 
-    # Fallback
     return {}
 
 
@@ -251,29 +233,8 @@ async def run_sesl(
     facts: Dict[str, Any],
 ) -> List[TextContent]:
     """
-    Execute SESL rules against a provided facts object.
-
-    Input:
-      contents: list of TextContent, concatenated into a SESL YAML string
-      facts: dict providing the fields used by rules
-
-    Output (on success):
-      [
-        {
-          "type": "text",
-          "text": "{ ... result fields ... }"
-        }
-      ]
-
-    Output (on error):
-      [
-        {
-          "type": "text",
-          "text": "{ \"error\": \"...\" }"
-        }
-      ]
+    Execute SESL rules against provided facts.
     """
-
     raw = "".join(c.text for c in contents)
     base_facts = _normalize_facts_input(facts)
 
@@ -284,9 +245,7 @@ async def run_sesl(
     if not raw.strip():
         return [make_error_content("Empty SESL")]
 
-    # --------------------------------------------------------
-    # STEP 1: Lint before executing
-    # --------------------------------------------------------
+    # LINT FIRST
     try:
         lint_issues_obj = lint_model_from_yaml(raw)
     except Exception as e:
@@ -304,24 +263,18 @@ async def run_sesl(
     ]
 
     if lint_errors:
-        # Return lint errors instead of trying to execute broken SESL
-        logger.warning("run_sesl found lint errors, returning issues instead of executing")
+        logger.warning("run_sesl found lint errors")
         return [make_issues_content(lint_errors)]
 
-    # --------------------------------------------------------
-    # STEP 2: Load SESL model (rules + any YAML scenarios)
-    # --------------------------------------------------------
+    # LOAD RULES
     try:
         rules, scenarios = load_model_from_yaml(raw)
     except Exception as e:
-        logger.warning("Failed to load SESL model from YAML: %s", format_error(e))
+        logger.warning("Failed to load SESL model: %s", format_error(e))
         return [make_error_content(format_error(e))]
 
-    # --------------------------------------------------------
-    # STEP 3: Determine starting facts
-    # --------------------------------------------------------
+    # SELECT SCENARIO
     try:
-        # If SESL YAML includes scenarios/facts, take the first one as the base.
         if scenarios:
             scenario_name, scenario_facts = scenarios[0]
             if not isinstance(scenario_facts, dict):
@@ -329,30 +282,23 @@ async def run_sesl(
         else:
             scenario_name, scenario_facts = ("runtime", {})
 
-        # Merge YAML scenario facts with user-provided facts.
-        # User-provided facts (base_facts) override YAML facts on key collisions.
-        runtime_facts: Dict[str, Any] = {
+        runtime_facts = {
             **scenario_facts,
             **(base_facts or {}),
         }
 
-        # Ensure scenario label and result dict.
-        runtime_facts.setdefault("scenario", scenario_name or "runtime")
+        runtime_facts.setdefault("scenario", scenario_name)
         runtime_facts.setdefault("result", {})
     except Exception as e:
-        logger.exception("Exception while constructing runtime facts")
+        logger.exception("Exception building runtime facts")
         return [make_error_content(format_error(e))]
 
-    logger.debug("run_sesl runtime_facts before execution: %r", runtime_facts)
-
-    # --------------------------------------------------------
-    # STEP 4: Execute forward chaining
-    # --------------------------------------------------------
+    # EXECUTE RULES
     try:
         monitor = Monitor()
         forward_chain(rules, runtime_facts, monitor=monitor)
         result = runtime_facts.get("result", {})
-        logger.debug("run_sesl result: %r", result)
+
         return [make_text_content(result)]
     except Exception as e:
         logger.exception("Exception during SESL forward chaining")
@@ -360,17 +306,14 @@ async def run_sesl(
 
 
 # ============================================================
-# Server Entrypoint
+# SERVER ENTRYPOINT
 # ============================================================
 
 def main() -> None:
     logger.info(
         "🌟 SESL MCP Server Running...\n"
-        "   Endpoint: http://localhost:3000/mcp\n"
-        "   Use ngrok/cloudflared for remote access.\n"
     )
 
-    # Avoid uvicorn shutdown hangs in some environments
     os.environ["UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN"] = "0"
 
     mcp.run(
