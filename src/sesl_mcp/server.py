@@ -1,8 +1,8 @@
 import json
 import logging
 import os
-import traceback
-from typing import Any, Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import yaml
 from fastmcp import FastMCP
@@ -25,6 +25,40 @@ if not logger.handlers:
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
     )
+
+
+# ============================================================
+# PROMPT LOADING (generate_sesl)
+# ============================================================
+
+PROMPT_FILE_NAME = "sesl_prompt.txt"
+PROMPT_PATH = Path(__file__).with_name(PROMPT_FILE_NAME)
+
+
+def _load_prompt_template() -> str:
+    """
+    Load the SESL authoring instructions template from sesl_prompt.txt.
+
+    The file must contain a placeholder '{prompt}' which will be formatted
+    with the user prompt in generate_sesl().
+    """
+    try:
+        text = PROMPT_PATH.read_text(encoding="utf-8")
+        if "{prompt}" not in text:
+            logger.warning(
+                "SESL prompt file does not contain '{prompt}' placeholder; "
+                "generate_sesl will not inject user prompt correctly."
+            )
+        return text
+    except FileNotFoundError:
+        logger.error(
+            "SESL prompt file '%s' not found. Falling back to a minimal template.",
+            PROMPT_FILE_NAME,
+        )
+        return "Generate SESL code for the prompt: {prompt}"
+
+
+PROMPT_TEMPLATE = _load_prompt_template()
 
 
 # ============================================================
@@ -84,97 +118,19 @@ mcp.debug = True
 async def generate_sesl(prompt: str) -> str:
     """
     Generate SESL authoring instructions for a given natural-language prompt.
+
     NOTE: This returns a string (not TextContent) on purpose so the client
     can feed it directly into an LLM as a system or tool prompt.
     """
-
     logger.info("generate_sesl called with prompt: %r", prompt)
 
-    # 🔴 IMPORTANT: Do not change the instructional text content.
-    return f"""Generate SESL code for the prompt: {prompt} using the following rulles.
-Produce VALID SESL YAML ONLY. ONLY USE THE commands and structures below. Do not add anything. You are an expert SESL rule-writer.
-Your task is to convert natural-language policies or business logic into SESL YAML compatible with the SESL rule engine. Follow these rules exactly:
-SESL File Structure
-A SESL file is valid YAML and contains:
-const: (optional dictionary of global constants)
-rules: (list of rules)
-facts: (the list of facts which drives the rules)
-A rule must have this structure:
-rule: <rule name>
-priority: <integer>
-let: <optional dictionary of precomputed variables>
-if: <condition: string, list, or nested logic dict>
-then: <result assignments>
-because: <short explanation string>
-stop: true|false (optional)
-Indentation must be 2 spaces.
-LET Variables
-LET variables are evaluated before conditions. They may reference facts, constants, and other LET variables except themselves.
-Allowed expressions: literals, arithmetic, boolean expressions, dotted paths like user.age. Missing dotted paths return None. None behaves as 0 in arithmetic.
-Division by zero returns 0. Self-referential LETs are forbidden.
-Conditions
-Valid condition forms:
-Simple: user.age > 18, status == "ACTIVE", country in ["US","CA"], role not in ["admin","owner"].
-Nested logic:
-if:
-  all:
-    user.age > 18
-  any:
-    score > 700
-    status == "VIP"
-Logic keys: all or and, any or or, not.
-Operand Resolution Rules
-String literals are quoted. true and false are booleans. Numbers without quotes are numeric.
-Dotted names (user.age) are field lookups.
-Bare identifiers (no dot, no quotes) resolve in this order: 1. LET variables, 2. constants (_const), 3. fact fields, otherwise error. result.* lookups are soft and missing values return None.
-Actions (THEN block)
-Actions assign fields under result. If the expression cannot be resolved as a literal or identifier, treat it as a string.
-Fields without dots are implicitly placed under result. Lower-priority rules cannot override fields set by higher-priority rules.
-Rule Priorities
-Higher priority executes first and owns the fields it sets. Lower-priority rules cannot overwrite those fields.
-Truth Maintenance System
-Do not reference TMS explicitly. A field remains set only while the rules supporting it remain true. When supporting rules become false, the field is retracted.
-Write rules so this behavior is correct.
-Error-Safe SESL Generation
-Avoid unreachable or contradictory conditions. Avoid self-referential LETs. All lists must be valid Python literals.
-Quote all strings. Use explicit values in actions such as "APPROVED".
-Output Requirements
-When encoding a source document, extract rules and convert them into SESL YAML. Use only valid YAML with 2-space indentation.
-Produce minimal, concise rules. Include a because field summarizing each rule. Output only SESL YAML with no commentary.
-Example Rule
-rule: AdultCheck
-priority: 10
-if: user.age >= 18
-then:
-  is_adult: true
-because: "User is 18 or older"
-You must follow all rules above exactly when generating SESL.
-Facts
-The facts: block is an optional top-level YAML list used only for testing SESL rules.
-Each item in the facts: list represents one input scenario. A fact scenario defines the fields available to rule conditions and LET expressions.
-Facts simulate real input data such as user.age, country, or status. Facts do not affect rule logic or priority; they exist only to verify rule behavior.
-Each fact is a YAML dictionary representing one evaluation context.
-Missing dotted-path fields automatically resolve to None. Facts may contain nested structures, lists, numbers, booleans, and strings.
-Example structure:
-facts:
-  - user:
-      age: 25
-      country: "US"
-      status: "ACTIVE"
-  - user:
-      age: 16
-      country: "CA"
-      status: "INACTIVE"
-Facts should include only fields referenced by rules or LET variables. The model must output a facts block only when explicitly requested.
-In SESL, a scenario is one item inside the facts: block.
-A scenario represents one complete input dataset used to test rule evaluation.
-A scenario defines the values of all fields that may be referenced by:
-  rule conditions
-  LET variables
-  operand lookups
-  dotted-path expressions (user.age, account.balance, etc.)
-
-"""
+    # Use the external template file and inject the user prompt.
+    try:
+        return PROMPT_TEMPLATE.format(prompt=prompt)
+    except Exception as e:
+        logger.exception("Failed to format SESL prompt template")
+        # Fallback to a minimal instruction if the template is malformed
+        return f"Generate SESL code for the prompt: {prompt}"
 
 
 # ============================================================
@@ -185,7 +141,9 @@ A scenario defines the values of all fields that may be referenced by:
 async def lint_sesl(contents: List[TextContent]) -> List[TextContent]:
     """
     Lint SESL YAML content.
+
     `contents` is a list of TextContent segments that will be concatenated.
+
     Returns a single TextContent with JSON:
     {
       "issues": [
@@ -202,7 +160,7 @@ async def lint_sesl(contents: List[TextContent]) -> List[TextContent]:
     try:
         if not raw.strip():
             issues = [{
-                "level": "error",
+                "level": "ERROR",
                 "message": "Empty SESL",
                 "rule": "parser"
             }]
@@ -224,7 +182,7 @@ async def lint_sesl(contents: List[TextContent]) -> List[TextContent]:
     except Exception as e:
         logger.exception("Exception during lint_sesl")
         issues = [{
-            "level": "error",
+            "level": "ERROR",
             "message": f"Exception during lint: {format_error(e)}",
             "rule": "internal"
         }]
@@ -240,33 +198,51 @@ def _normalize_facts_input(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     Normalize the 'facts' parameter into a flat dict representing a single scenario.
 
     Supports a few flexible shapes:
-    - {} or None -> {}
+
+    - None / {}                 -> {}
     - {"facts": [ {...}, ... ]} -> first element
     - {"scenarios": [ {...}, ... ]} -> first element
-    - {"x": 1, "y": 2} -> used as-is
+    - {"scenario1": {...}, "scenario2": {...}} -> first scenario dict
+    - [ {...}, ... ]            -> first element
+    - {"x": 1, "y": 2}          -> used as-is
 
-    The MCP client can therefore send:
+    This allows clients to send:
       facts={ "temperature": 31 }
     or
       facts={ "scenarios": [ { "temperature": 31 }, { "temperature": 15 } ] }
+    or
+      facts={ "scenario1": { "user": {...} }, "scenario2": { "user": {...} } }
     """
     if not facts:
         return {}
 
-    # If we got an envelope with 'facts' list
-    if "facts" in facts and isinstance(facts["facts"], list) and facts["facts"]:
-        first = facts["facts"][0]
-        if isinstance(first, dict):
-            return first
+    # Envelope with 'facts' list
+    if isinstance(facts, dict) and "facts" in facts:
+        candidate = facts["facts"]
+        if isinstance(candidate, list) and candidate and isinstance(candidate[0], dict):
+            return candidate[0]
 
-    # Or with 'scenarios' list
-    if "scenarios" in facts and isinstance(facts["scenarios"], list) and facts["scenarios"]:
-        first = facts["scenarios"][0]
-        if isinstance(first, dict):
-            return first
+    # Envelope with 'scenarios' list
+    if isinstance(facts, dict) and "scenarios" in facts:
+        candidate = facts["scenarios"]
+        if isinstance(candidate, list) and candidate and isinstance(candidate[0], dict):
+            return candidate[0]
 
-    # Otherwise assume it's already a dict of fields
-    return facts
+    # Top-level list of scenarios
+    if isinstance(facts, list) and facts and isinstance(facts[0], dict):
+        return facts[0]
+
+    # Dict where every value is a dict -> treat as multiple named scenarios
+    if isinstance(facts, dict) and facts and all(isinstance(v, dict) for v in facts.values()):
+        first_key = next(iter(facts))
+        return facts[first_key]
+
+    # Otherwise assume it's already a single scenario dict
+    if isinstance(facts, dict):
+        return facts
+
+    # Fallback
+    return {}
 
 
 @mcp.tool()
@@ -285,7 +261,7 @@ async def run_sesl(
       [
         {
           "type": "text",
-          "text": "{\n  \"result\": { ... }\n}"
+          "text": "{ ... result fields ... }"
         }
       ]
 
@@ -293,7 +269,7 @@ async def run_sesl(
       [
         {
           "type": "text",
-          "text": "{\n  \"error\": \"...\"\n}"
+          "text": "{ \"error\": \"...\" }"
         }
       ]
     """
@@ -303,89 +279,83 @@ async def run_sesl(
 
     logger.info("run_sesl called")
     logger.debug("run_sesl input YAML: %r", raw)
-    logger.debug("run_sesl input facts: %r", base_facts)
+    logger.debug("run_sesl input facts (normalized): %r", base_facts)
 
+    if not raw.strip():
+        return [make_error_content("Empty SESL")]
+
+    # --------------------------------------------------------
+    # STEP 1: Lint before executing
+    # --------------------------------------------------------
     try:
-        if not raw.strip():
-            return [make_error_content("Empty SESL")]
-
-        # --------------------------------------------------------
-        # STEP 1: Load original SESL YAML to ensure it's valid
-        # --------------------------------------------------------
-        try:
-            rules, _scenarios = load_model_from_yaml(raw)
-        except Exception as e:
-            logger.warning("Failed to load SESL model from raw YAML: %s", format_error(e))
-            return [make_error_content(format_error(e))]
-
-        # --------------------------------------------------------
-        # STEP 2: Construct a runtime model that SESL can execute
-        # --------------------------------------------------------
-        try:
-            runtime_facts: Dict[str, Any] = {
-                "scenario": "runtime",
-                **(base_facts or {}),
-                "result": {},
-            }
-
-            core_model: Dict[str, Any] = {
-                "rules": [],
-                "facts": [runtime_facts],
-            }
-
-            for r in rules:
-                entry: Dict[str, Any] = {"rule": r.name}
-
-                if getattr(r, "conditions", None):
-                    entry["if"] = r.conditions
-                if getattr(r, "actions", None):
-                    entry["then"] = r.actions
-                if getattr(r, "because", None):
-                    entry["because"] = r.because
-                if getattr(r, "priority", None) is not None:
-                    entry["priority"] = r.priority
-                if getattr(r, "lets", None):
-                    # We don't want to reconstruct compiled code here; just mark presence.
-                    entry["let"] = {k: "(compiled)" for k in r.lets}
-                if getattr(r, "stop_on_fire", None):
-                    entry["stop"] = True
-
-                core_model["rules"].append(entry)
-
-            rebuilt_yaml = yaml.safe_dump(core_model, sort_keys=False)
-            logger.debug("run_sesl rebuilt YAML: %r", rebuilt_yaml)
-
-        except Exception as e:
-            logger.exception("Exception while constructing runtime SESL model")
-            return [make_error_content(format_error(e))]
-
-        # --------------------------------------------------------
-        # STEP 3: Reload runtime SESL model
-        # --------------------------------------------------------
-        try:
-            rules, scenarios = load_model_from_yaml(rebuilt_yaml)
-            if not scenarios:
-                raise RuntimeError("No scenarios found after rebuilding SESL model")
-            _, facts_obj = scenarios[0]
-        except Exception as e:
-            logger.exception("Exception while reloading runtime SESL model")
-            return [make_error_content(format_error(e))]
-
-        # --------------------------------------------------------
-        # STEP 4: Execute forward chaining
-        # --------------------------------------------------------
-        try:
-            monitor = Monitor()
-            forward_chain(rules, facts_obj, monitor=monitor)
-            result = facts_obj.get("result", {})
-            logger.debug("run_sesl result: %r", result)
-            return [make_text_content(result)]
-        except Exception as e:
-            logger.exception("Exception during SESL forward chaining")
-            return [make_error_content(format_error(e))]
-
+        lint_issues_obj = lint_model_from_yaml(raw)
     except Exception as e:
-        logger.exception("Unexpected exception in run_sesl")
+        logger.exception("Exception during lint inside run_sesl")
+        return [make_error_content(f"Lint failure: {format_error(e)}")]
+
+    lint_errors = [
+        {
+            "level": i.level,
+            "message": i.message,
+            "rule": i.rule,
+        }
+        for i in lint_issues_obj
+        if str(i.level).upper() == "ERROR"
+    ]
+
+    if lint_errors:
+        # Return lint errors instead of trying to execute broken SESL
+        logger.warning("run_sesl found lint errors, returning issues instead of executing")
+        return [make_issues_content(lint_errors)]
+
+    # --------------------------------------------------------
+    # STEP 2: Load SESL model (rules + any YAML scenarios)
+    # --------------------------------------------------------
+    try:
+        rules, scenarios = load_model_from_yaml(raw)
+    except Exception as e:
+        logger.warning("Failed to load SESL model from YAML: %s", format_error(e))
+        return [make_error_content(format_error(e))]
+
+    # --------------------------------------------------------
+    # STEP 3: Determine starting facts
+    # --------------------------------------------------------
+    try:
+        # If SESL YAML includes scenarios/facts, take the first one as the base.
+        if scenarios:
+            scenario_name, scenario_facts = scenarios[0]
+            if not isinstance(scenario_facts, dict):
+                scenario_facts = {}
+        else:
+            scenario_name, scenario_facts = ("runtime", {})
+
+        # Merge YAML scenario facts with user-provided facts.
+        # User-provided facts (base_facts) override YAML facts on key collisions.
+        runtime_facts: Dict[str, Any] = {
+            **scenario_facts,
+            **(base_facts or {}),
+        }
+
+        # Ensure scenario label and result dict.
+        runtime_facts.setdefault("scenario", scenario_name or "runtime")
+        runtime_facts.setdefault("result", {})
+    except Exception as e:
+        logger.exception("Exception while constructing runtime facts")
+        return [make_error_content(format_error(e))]
+
+    logger.debug("run_sesl runtime_facts before execution: %r", runtime_facts)
+
+    # --------------------------------------------------------
+    # STEP 4: Execute forward chaining
+    # --------------------------------------------------------
+    try:
+        monitor = Monitor()
+        forward_chain(rules, runtime_facts, monitor=monitor)
+        result = runtime_facts.get("result", {})
+        logger.debug("run_sesl result: %r", result)
+        return [make_text_content(result)]
+    except Exception as e:
+        logger.exception("Exception during SESL forward chaining")
         return [make_error_content(format_error(e))]
 
 
