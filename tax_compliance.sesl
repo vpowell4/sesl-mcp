@@ -1,0 +1,180 @@
+const:
+  SINGLE: "SINGLE"
+  MARRIED: "MARRIED"
+  STANDARD_SINGLE: 12000
+  STANDARD_MARRIED: 24000
+
+rules:
+
+  - rule: RequiresFiling_Income
+    priority: 100
+    if:
+      any:
+        - total_income > 12000
+        - self_employment_income > 400
+        - investment_income > 0
+    then:
+      requires_filing: true
+    because: "Filing required due to income thresholds"
+
+  - rule: DoesNotRequireFiling
+    priority: 10
+    if:
+      all:
+        - total_income <= 12000
+        - self_employment_income <= 400
+        - investment_income == 0
+    then:
+      requires_filing: false
+    because: "Filing not required because no filing criteria met"
+
+  - rule: FilingStatusMarried
+    priority: 100
+    if: marital_status == "married"
+    then:
+      filing_status: "MARRIED"
+    because: "Taxpayer is married"
+
+  - rule: FilingStatusSingle
+    priority: 90
+    if: marital_status != "married"
+    then:
+      filing_status: "SINGLE"
+    because: "Taxpayer is single"
+
+  # Taxable income rules
+  - rule: TaxableIncomeSingle_Zero
+    priority: 80
+    if:
+      all:
+        - filing_status == "SINGLE"
+        - total_income <= STANDARD_SINGLE
+    then:
+      taxable_income: 0
+    because: "Single filer with income at or below deduction"
+
+  - rule: TaxableIncomeSingle_Positive
+    priority: 80
+    let:
+      raw_taxable: total_income - STANDARD_SINGLE
+    if:
+      all:
+        - filing_status == "SINGLE"
+        - total_income > STANDARD_SINGLE
+    then:
+      taxable_income: raw_taxable
+    because: "Single filer positive taxable income"
+
+  - rule: TaxableIncomeMarried_Zero
+    priority: 80
+    if:
+      all:
+        - filing_status == "MARRIED"
+        - total_income <= STANDARD_MARRIED
+    then:
+      taxable_income: 0
+    because: "Married filer with income at or below deduction"
+
+  - rule: TaxableIncomeMarried_Positive
+    priority: 80
+    let:
+      raw_taxable: total_income - STANDARD_MARRIED
+    if:
+      all:
+        - filing_status == "MARRIED"
+        - total_income > STANDARD_MARRIED
+    then:
+      taxable_income: raw_taxable
+    because: "Married filer positive taxable income"
+
+  # Tax brackets
+  - rule: ComputeTaxDue_Single_Low
+    priority: 70
+    if:
+      all:
+        - filing_status == "SINGLE"
+        - taxable_income <= 10000
+    then:
+      tax_due: taxable_income * 0.10
+    because: "Single low bracket"
+
+  - rule: ComputeTaxDue_Single_High
+    priority: 70
+    if:
+      all:
+        - filing_status == "SINGLE"
+        - taxable_income > 10000
+    then:
+      tax_due: (10000 * 0.10) + ((taxable_income - 10000) * 0.20)
+    because: "Single high bracket"
+
+  - rule: ComputeTaxDue_Married_Low
+    priority: 70
+    if:
+      all:
+        - filing_status == "MARRIED"
+        - taxable_income <= 20000
+    then:
+      tax_due: taxable_income * 0.10
+    because: "Married low bracket"
+
+  - rule: ComputeTaxDue_Married_High
+    priority: 70
+    if:
+      all:
+        - filing_status == "MARRIED"
+        - taxable_income > 20000
+    then:
+      tax_due: (20000 * 0.10) + ((taxable_income - 20000) * 0.20)
+    because: "Married high bracket"
+
+  # Refund or balance
+  - rule: Refund
+    priority: 50
+    if: withholding > tax_due
+    then:
+      result: "REFUND"
+    because: "Refund due"
+
+  - rule: BalanceDue
+    priority: 50
+    if: withholding < tax_due
+    then:
+      result: "BALANCE_DUE"
+    because: "Balance owed"
+
+  - rule: NoBalance
+    priority: 50
+    if: withholding == tax_due
+    then:
+      result: "NO_BALANCE"
+    because: "No balance or refund"
+
+facts:
+  - scenario: "Low income single, no filing required"
+    marital_status: "single"
+    total_income: 9000
+    self_employment_income: 0
+    investment_income: 0
+    withholding: 0
+
+  - scenario: "Single filer with refund"
+    marital_status: "single"
+    total_income: 30000
+    self_employment_income: 0
+    investment_income: 200
+    withholding: 5000
+
+  - scenario: "Married filer owes tax"
+    marital_status: "married"
+    total_income: 60000
+    self_employment_income: 0
+    investment_income: 0
+    withholding: 2000
+
+  - scenario: "Self-employed person must file"
+    marital_status: "single"
+    total_income: 8000
+    self_employment_income: 1200
+    investment_income: 0
+    withholding: 500

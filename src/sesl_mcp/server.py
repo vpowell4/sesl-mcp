@@ -36,12 +36,6 @@ PROMPT_PATH = Path(__file__).with_name(PROMPT_FILE_NAME)
 
 
 def _load_prompt_template() -> str:
-    """
-    Load the SESL authoring instructions template from sesl_prompt.txt.
-
-    The file must contain a placeholder '{prompt}' which will be formatted
-    with the user prompt in generate_sesl().
-    """
     try:
         text = PROMPT_PATH.read_text(encoding="utf-8")
         if "{prompt}" not in text:
@@ -62,41 +56,20 @@ PROMPT_TEMPLATE = _load_prompt_template()
 
 
 # ============================================================
-# HELPER: format_error
+# HELPERS
 # ============================================================
 
 def format_error(e: BaseException) -> str:
-    """
-    Return a concise, readable error string for exceptions.
-    """
     return f"{type(e).__name__}: {e}"
 
 
-# ============================================================
-# JSON FALLBACK FIX (IMPORTANT)
-# ============================================================
-
 def _json_fallback(obj: Any):
-    """
-    JSON serializer for objects not supported by default json.dumps.
-    Converts sets to lists; unknown objects to strings.
-    """
     if isinstance(obj, set):
         return sorted(list(obj))
     return str(obj)
 
 
-# ============================================================
-# HELPER: TextContent factories
-# ============================================================
-
 def make_text_content(payload: Any) -> TextContent:
-    """
-    Wrap a Python object (dict, list, str, etc.) into a JSON-encoded TextContent.
-    Always returns a valid TextContent for MCP (type='text').
-
-    *** FIXED: now serializes sets safely ***
-    """
     if isinstance(payload, str):
         text = payload
     else:
@@ -106,17 +79,34 @@ def make_text_content(payload: Any) -> TextContent:
 
 
 def make_error_content(message: str) -> TextContent:
-    """
-    Standard JSON error wrapper.
-    """
     return make_text_content({"error": message})
 
 
 def make_issues_content(issues: List[Dict[str, Any]]) -> TextContent:
-    """
-    Wrap SESL lint issues in a standard shape.
-    """
     return make_text_content({"issues": issues})
+
+
+# ============================================================
+# NORMALIZE CONTENTS
+# ============================================================
+
+def _normalize_contents(contents: List[Any]) -> str:
+    """
+    Accept both:
+      - TextContent objects
+      - dicts shaped like {"type": "text", "text": "..."}
+      - raw strings
+    Returns concatenated YAML text.
+    """
+    parts = []
+    for c in contents:
+        if isinstance(c, TextContent):
+            parts.append(c.text)
+        elif isinstance(c, dict) and c.get("type") == "text":
+            parts.append(c.get("text", ""))
+        else:
+            parts.append(str(c))
+    return "".join(parts)
 
 
 # ============================================================
@@ -133,33 +123,23 @@ mcp.debug = True
 
 @mcp.tool()
 async def generate_sesl(prompt: str) -> str:
-    """
-    Generate SESL authoring instructions for a given natural-language prompt.
-
-    NOTE: This returns a string (not TextContent) on purpose so the client
-    can feed it directly into an LLM as a system or tool prompt.
-    """
     logger.info("generate_sesl called with prompt: %r", prompt)
 
     try:
         return PROMPT_TEMPLATE.format(prompt=prompt)
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to format SESL prompt template")
         return f"Generate SESL code for the prompt: {prompt}"
 
 
 # ============================================================
-# TOOL 2: lint_sesl
+# TOOL 2: lint_sesl  (patched!)
 # ============================================================
 
 @mcp.tool()
-async def lint_sesl(contents: List[TextContent]) -> List[TextContent]:
-    """
-    Lint SESL YAML content.
-    """
-    raw = "".join(c.text for c in contents)
+async def lint_sesl(contents: List[Any]) -> List[TextContent]:
+    raw = _normalize_contents(contents)
     logger.info("lint_sesl called")
-    logger.debug("lint_sesl input YAML: %r", raw)
 
     try:
         if not raw.strip():
@@ -172,14 +152,11 @@ async def lint_sesl(contents: List[TextContent]) -> List[TextContent]:
 
         issues_obj = lint_model_from_yaml(raw)
 
-        issues = [
-            {
-                "level": i.level,
-                "message": i.message,
-                "rule": i.rule,
-            }
-            for i in issues_obj
-        ]
+        issues = [{
+            "level": i.level,
+            "message": i.message,
+            "rule": i.rule,
+        } for i in issues_obj]
 
         return [make_issues_content(issues)]
 
@@ -194,13 +171,10 @@ async def lint_sesl(contents: List[TextContent]) -> List[TextContent]:
 
 
 # ============================================================
-# TOOL 3: run_sesl
+# TOOL 3: run_sesl (patched!)
 # ============================================================
 
 def _normalize_facts_input(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """
-    Normalize the 'facts' parameter into a flat dict representing one scenario.
-    """
     if not facts:
         return {}
 
@@ -229,18 +203,14 @@ def _normalize_facts_input(facts: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 @mcp.tool()
 async def run_sesl(
-    contents: List[TextContent],
+    contents: List[Any],
     facts: Dict[str, Any],
 ) -> List[TextContent]:
-    """
-    Execute SESL rules against provided facts.
-    """
-    raw = "".join(c.text for c in contents)
+
+    raw = _normalize_contents(contents)
     base_facts = _normalize_facts_input(facts)
 
     logger.info("run_sesl called")
-    logger.debug("run_sesl input YAML: %r", raw)
-    logger.debug("run_sesl input facts (normalized): %r", base_facts)
 
     if not raw.strip():
         return [make_error_content("Empty SESL")]
@@ -252,15 +222,11 @@ async def run_sesl(
         logger.exception("Exception during lint inside run_sesl")
         return [make_error_content(f"Lint failure: {format_error(e)}")]
 
-    lint_errors = [
-        {
-            "level": i.level,
-            "message": i.message,
-            "rule": i.rule,
-        }
-        for i in lint_issues_obj
-        if str(i.level).upper() == "ERROR"
-    ]
+    lint_errors = [{
+        "level": i.level,
+        "message": i.message,
+        "rule": i.rule,
+    } for i in lint_issues_obj if str(i.level).upper() == "ERROR"]
 
     if lint_errors:
         logger.warning("run_sesl found lint errors")
@@ -284,7 +250,7 @@ async def run_sesl(
 
         runtime_facts = {
             **scenario_facts,
-            **(base_facts or {}),
+            **base_facts,
         }
 
         runtime_facts.setdefault("scenario", scenario_name)
@@ -298,8 +264,8 @@ async def run_sesl(
         monitor = Monitor()
         forward_chain(rules, runtime_facts, monitor=monitor)
         result = runtime_facts.get("result", {})
-
         return [make_text_content(result)]
+
     except Exception as e:
         logger.exception("Exception during SESL forward chaining")
         return [make_error_content(format_error(e))]
@@ -310,9 +276,7 @@ async def run_sesl(
 # ============================================================
 
 def main() -> None:
-    logger.info(
-        "🌟 SESL MCP Server Running...\n"
-    )
+    logger.info("🌟 SESL MCP Server Running...\n")
 
     os.environ["UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN"] = "0"
 
