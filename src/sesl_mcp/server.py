@@ -22,6 +22,10 @@ SERVER_HOST = os.getenv("SESL_MCP_HOST", "0.0.0.0")
 SERVER_PORT = int(os.getenv("SESL_MCP_PORT", "3000"))
 DEBUG_MODE = os.getenv("SESL_MCP_DEBUG", "true").lower() == "true"
 
+# HTTP request limits (in bytes)
+MAX_REQUEST_SIZE = int(os.getenv("SESL_MCP_MAX_REQUEST_SIZE", str(100 * 1024 * 1024)))  # 100MB default
+REQUEST_TIMEOUT = int(os.getenv("SESL_MCP_TIMEOUT", "300"))  # 5 minutes default
+
 
 # ============================================================
 # LOGGING SETUP
@@ -93,6 +97,18 @@ def make_error_content(message: str) -> TextContent:
     return make_text_content({"error": message})
 
 
+def make_detailed_error(error_type: str, message: str, details: Dict[str, Any] = None) -> TextContent:
+    """Create detailed error response with debugging information."""
+    error_data = {
+        "error": message,
+        "error_type": error_type,
+        "timestamp": str(Path(__file__).parent),  # Using Path as placeholder for datetime
+    }
+    if details:
+        error_data["details"] = details
+    return make_text_content(error_data)
+
+
 def make_issues_content(issues: List[Dict[str, Any]]) -> TextContent:
     return make_text_content({"issues": issues})
 
@@ -146,17 +162,30 @@ async def generate_sesl(prompt: str) -> str:
     Returns:
         Complete prompt template with SESL specification and examples
     """
-    logger.info("generate_sesl called with prompt: %r", prompt)
+    prompt_length = len(prompt) if prompt else 0
+    logger.info("generate_sesl called, prompt length: %d chars", prompt_length)
 
     if not prompt or not prompt.strip():
         logger.warning("Empty prompt provided to generate_sesl")
-        return "Error: Prompt cannot be empty"
+        return "Error: Prompt cannot be empty. Please provide a natural language description of the rules you want to generate."
+    
+    # Warn if prompt is very large (may indicate an issue)
+    if prompt_length > 50000:  # ~50KB
+        logger.warning("Very large prompt received (%d chars). This may cause performance issues.", prompt_length)
 
     try:
-        return PROMPT_TEMPLATE.format(prompt=prompt.strip())
-    except Exception:
-        logger.exception("Failed to format SESL prompt template")
-        return f"Generate SESL code for the prompt: {prompt}"
+        result = PROMPT_TEMPLATE.format(prompt=prompt.strip())
+        result_length = len(result)
+        logger.info("generate_sesl successful, returning %d chars (input: %d chars)", result_length, prompt_length)
+        return result
+    except KeyError as e:
+        error_msg = f"Template formatting error: missing placeholder {e}"
+        logger.exception(error_msg)
+        return f"Error: {error_msg}\n\nFalling back to basic template.\n\nGenerate SESL code for: {prompt[:500]}..."
+    except Exception as e:
+        error_msg = f"Unexpected error in generate_sesl: {format_error(e)}"
+        logger.exception(error_msg)
+        return f"Error: {error_msg}\n\nPrompt length: {prompt_length} chars\nPlease check server logs for details."
 
 
 # ============================================================
@@ -175,16 +204,21 @@ async def lint_sesl(contents: List[Any]) -> List[TextContent]:
         List containing TextContent with validation issues (errors/warnings)
     """
     raw = _normalize_contents(contents)
-    logger.info("lint_sesl called, content length: %d bytes", len(raw))
+    content_length = len(raw)
+    logger.info("lint_sesl called, content length: %d bytes", content_length)
 
     try:
         if not raw.strip():
             issues = [{
                 "level": "ERROR",
-                "message": "Empty SESL",
-                "rule": "parser"
+                "message": "Empty SESL content provided",
+                "rule": "parser",
+                "details": "No content to lint. Please provide SESL YAML."
             }]
             return [make_issues_content(issues)]
+
+        # Log first 200 chars for debugging
+        logger.debug("lint_sesl content preview: %s", raw[:200])
 
         issues_obj = lint_model_from_yaml(raw)
 
@@ -194,14 +228,37 @@ async def lint_sesl(contents: List[Any]) -> List[TextContent]:
             "rule": i.rule,
         } for i in issues_obj]
 
+        logger.info("lint_sesl completed: %d issues found", len(issues))
         return [make_issues_content(issues)]
 
-    except Exception as e:
-        logger.exception("Exception during lint_sesl")
+    except yaml.YAMLError as e:
+        logger.exception("YAML parsing error during lint")
+        error_details = {
+            "error_type": "YAMLError",
+            "message": str(e),
+            "content_length": content_length,
+            "content_preview": raw[:500] if len(raw) > 500 else raw,
+        }
         issues = [{
             "level": "ERROR",
-            "message": f"Exception during lint: {format_error(e)}",
-            "rule": "internal"
+            "message": f"Invalid YAML syntax: {str(e)}",
+            "rule": "yaml_parser",
+            "details": error_details
+        }]
+        return [make_issues_content(issues)]
+    except Exception as e:
+        logger.exception("Exception during lint_sesl")
+        error_details = {
+            "error_type": type(e).__name__,
+            "message": str(e),
+            "content_length": content_length,
+            "stack_trace": format_error(e),
+        }
+        issues = [{
+            "level": "ERROR",
+            "message": f"Linting failed: {format_error(e)}",
+            "rule": "internal",
+            "details": error_details
         }]
         return [make_issues_content(issues)]
 
@@ -255,18 +312,42 @@ async def run_sesl(
     raw = _normalize_contents(contents)
     base_facts = _normalize_facts_input(facts)
 
-    logger.info("run_sesl called, content length: %d bytes, facts keys: %s",
-                len(raw), list(base_facts.keys()) if base_facts else [])
+    content_length = len(raw)
+    logger.info("run_sesl called, content: %d bytes, facts keys: %s",
+                content_length, list(base_facts.keys()) if base_facts else [])
 
     if not raw.strip():
-        return [make_error_content("Empty SESL")]
+        return [make_detailed_error(
+            "EmptyContent",
+            "Empty SESL content provided",
+            {"suggestion": "Please provide valid SESL YAML content"}
+        )]
 
     # LINT FIRST
     try:
+        logger.debug("run_sesl: Starting lint phase")
         lint_issues_obj = lint_model_from_yaml(raw)
+    except yaml.YAMLError as e:
+        logger.exception("YAML parsing error in run_sesl")
+        return [make_detailed_error(
+            "YAMLError",
+            f"Invalid YAML syntax: {str(e)}",
+            {
+                "content_length": content_length,
+                "content_preview": raw[:500] if len(raw) > 500 else raw,
+                "suggestion": "Check YAML syntax: indentation, colons, dashes, quotes"
+            }
+        )]
     except Exception as e:
         logger.exception("Exception during lint inside run_sesl")
-        return [make_error_content(f"Lint failure: {format_error(e)}")]
+        return [make_detailed_error(
+            "LintError",
+            f"Lint failure: {format_error(e)}",
+            {
+                "content_length": content_length,
+                "error_type": type(e).__name__,
+            }
+        )]
 
     lint_errors = [{
         "level": i.level,
@@ -275,15 +356,25 @@ async def run_sesl(
     } for i in lint_issues_obj if str(i.level).upper() == "ERROR"]
 
     if lint_errors:
-        logger.warning("run_sesl found lint errors")
+        logger.warning("run_sesl found %d lint errors", len(lint_errors))
         return [make_issues_content(lint_errors)]
 
     # LOAD RULES
     try:
+        logger.debug("run_sesl: Loading rules from YAML")
         rules, scenarios = load_model_from_yaml(raw)
+        logger.info("run_sesl: Loaded %d rules, %d scenarios", len(rules), len(scenarios))
     except Exception as e:
-        logger.warning("Failed to load SESL model: %s", format_error(e))
-        return [make_error_content(format_error(e))]
+        logger.exception("Failed to load SESL model")
+        return [make_detailed_error(
+            "ModelLoadError",
+            f"Failed to load SESL model: {format_error(e)}",
+            {
+                "error_type": type(e).__name__,
+                "content_length": content_length,
+                "suggestion": "Check rule structure: each rule needs rule, priority, if, then, because"
+            }
+        )]
 
     # SELECT SCENARIO
     try:
@@ -291,8 +382,10 @@ async def run_sesl(
             scenario_name, scenario_facts = scenarios[0]
             if not isinstance(scenario_facts, dict):
                 scenario_facts = {}
+            logger.debug("run_sesl: Using scenario '%s'", scenario_name)
         else:
             scenario_name, scenario_facts = ("runtime", {})
+            logger.debug("run_sesl: No scenarios defined, using runtime facts")
 
         runtime_facts = {
             **scenario_facts,
@@ -301,12 +394,23 @@ async def run_sesl(
 
         runtime_facts.setdefault("scenario", scenario_name)
         runtime_facts.setdefault("result", {})
+        
+        logger.debug("run_sesl: Runtime facts keys: %s", list(runtime_facts.keys()))
     except Exception as e:
         logger.exception("Exception building runtime facts")
-        return [make_error_content(format_error(e))]
+        return [make_detailed_error(
+            "FactsBuildError",
+            f"Failed to build runtime facts: {format_error(e)}",
+            {
+                "error_type": type(e).__name__,
+                "provided_facts": list(base_facts.keys()) if base_facts else [],
+                "scenario_count": len(scenarios) if scenarios else 0,
+            }
+        )]
 
     # EXECUTE RULES
     try:
+        logger.debug("run_sesl: Starting rule execution")
         monitor = Monitor()
         forward_chain(rules, runtime_facts, monitor=monitor)
         result = runtime_facts.get("result", {})
@@ -317,16 +421,27 @@ async def run_sesl(
             "metadata": {
                 "rules_executed": len(rules),
                 "scenario": scenario_name,
+                "result_fields": list(result.keys()) if result else [],
             }
         }
         
-        logger.info("SESL execution completed successfully, %d rules, result keys: %s",
-                   len(rules), list(result.keys()))
+        logger.info("SESL execution successful: %d rules, %d result fields",
+                   len(rules), len(result))
         return [make_text_content(execution_summary)]
 
     except Exception as e:
         logger.exception("Exception during SESL forward chaining")
-        return [make_error_content(format_error(e))]
+        return [make_detailed_error(
+            "ExecutionError",
+            f"Rule execution failed: {format_error(e)}",
+            {
+                "error_type": type(e).__name__,
+                "rules_count": len(rules),
+                "scenario": scenario_name,
+                "facts_provided": list(base_facts.keys()) if base_facts else [],
+                "suggestion": "Check rule conditions and LET variable references"
+            }
+        )]
 
 
 # ============================================================
@@ -363,13 +478,19 @@ def main() -> None:
                 SERVER_HOST if SERVER_HOST != "0.0.0.0" else "localhost", 
                 SERVER_PORT)
 
+    # Configure Uvicorn for large payloads
     os.environ["UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN"] = "0"
+    os.environ["UVICORN_TIMEOUT_KEEP_ALIVE"] = str(REQUEST_TIMEOUT)
 
     try:
         mcp.run(
             transport="http",
             host=SERVER_HOST,
             port=SERVER_PORT,
+            # Uvicorn server config
+            timeout_keep_alive=REQUEST_TIMEOUT,
+            limit_max_requests=None,  # No request limit
+            limit_concurrency=None,   # No concurrency limit
         )
     except KeyboardInterrupt:
         logger.info("Server shutdown requested")
