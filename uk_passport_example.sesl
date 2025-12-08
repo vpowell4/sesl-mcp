@@ -1,0 +1,202 @@
+const:
+  UK_COUNTRIES:
+    - "England"
+    - "Scotland"
+    - "Wales"
+    - "Northern Ireland"
+
+rules:
+  - rule: DetermineApplicationLocation
+    priority: 100
+    if:
+      any:
+        - country in UK_COUNTRIES
+        - country == "UK"
+    then:
+      application_location: "inside_uk"
+    because: "Identify if the applicant is applying from inside the UK"
+
+  - rule: DetermineApplicationLocationOutsideUK
+    priority: 90
+    if:
+      not:
+        - country in UK_COUNTRIES
+    then:
+      application_location: "outside_uk"
+    because: "Identify if the applicant is applying from outside the UK"
+
+  - rule: DetermineAdultEligibility
+    priority: 100
+    if: age >= 16
+    then:
+      is_adult_application: true
+    because: "Applicant is at least 16 so can apply for a first adult passport"
+
+  - rule: DetermineChildApplication
+    priority: 90
+    if: age < 16
+    then:
+      is_adult_application: false
+    because: "Applicant is under 16 so this would not be a first adult passport application"
+
+  - rule: DetermineFirstPassport
+    priority: 100
+    if:
+      all:
+        - has_had_uk_passport_before == false
+        - replacing_lost_or_stolen == false
+    then:
+      is_first_passport: true
+    because: "Applicant has never had a UK passport before and is not replacing a lost or stolen passport"
+
+  - rule: DetermineNotFirstPassport
+    priority: 90
+    if:
+      any:
+        - has_had_uk_passport_before == true
+        - replacing_lost_or_stolen == true
+    then:
+      is_first_passport: false
+    because: "Applicant is renewing or replacing, so it is not a first adult passport application"
+
+  - rule: BasicIdentityFields
+    priority: 100
+    if: true
+    then:
+      requires_full_name: true
+      requires_previous_names: true
+      requires_date_of_birth: true
+      requires_place_of_birth: true
+      requires_gender: true
+      requires_national_insurance_if_known: true
+    because: "Core identity fields required on the first adult passport application form"
+
+  - rule: ContactDetailsFields
+    priority: 95
+    if: true
+    then:
+      requires_email: true
+      requires_phone_number: true
+      requires_home_address: true
+      requires_time_at_address: true
+    because: "Key contact details used for communication and security checks"
+
+  - rule: ParentalDetailsFields
+    priority: 90
+    if: true
+    then:
+      requires_parent_details: true
+      requires_parent_names: true
+      requires_parent_dates_of_birth: true
+      requires_parent_places_of_birth: true
+    because: "Parent details are required to confirm identity and nationality for a first adult passport"
+
+  - rule: PreviousPassportDetailsIfAny
+    priority: 85
+    if: has_had_uk_passport_before == true
+    then:
+      requires_previous_passport_number: true
+      requires_previous_passport_issue_date: true
+      requires_previous_passport_issue_place: true
+    because: "If the applicant had a passport before, previous passport details are requested"
+
+  - rule: LostOrStolenPassportDetails
+    priority: 85
+    if: replacing_lost_or_stolen == true
+    then:
+      requires_lost_or_stolen_details: true
+      requires_police_reference_if_reported: true
+    because: "Lost or stolen passports require additional information and may need a police reference"
+
+  - rule: CountersignatureRequired
+    priority: 80
+    if:
+      all:
+        - is_first_passport == true
+        - has_suitable_photo_id == false
+    then:
+      requires_countersignature: true
+    because: "First adult passport applications without strong photo ID often require a countersignature"
+
+  - rule: PhotoRequirements
+    priority: 80
+    if: true
+    then:
+      requires_passport_photos: true
+      requires_photo_meet_standard: true
+    because: "Applicant must provide compliant passport photos following UK passport photo rules"
+
+  - rule: InsideUKFeeAndPayment
+    priority: 70
+    if: application_location == "inside_uk"
+    then:
+      allows_online_payment: true
+      allows_post_office_check_send: true
+      typical_processing_time_weeks: 3
+    because: "Applications inside the UK can be completed online or via Post Office services with standard UK processing times"
+
+  - rule: OutsideUKFeeAndPayment
+    priority: 70
+    if: application_location == "outside_uk"
+    then:
+      allows_online_start_with_local_print_and_send: true
+      requires_payment_in_local_currency_if_applicable: true
+      typical_processing_time_weeks: 11
+    because: "Applications from outside the UK usually involve different payment methods and longer processing"
+
+  - rule: TravelPlansQuestion
+    priority: 60
+    if: true
+    then:
+      asks_about_travel_date: true
+      asks_if_passport_is_for_first_travel: true
+    because: "Form asks whether the applicant has travel booked and when they need the passport"
+
+  - rule: DeliveryAndReturnOptionsInsideUK
+    priority: 60
+    if: application_location == "inside_uk"
+    then:
+      requires_delivery_address: true
+      allows_secure_delivery_options: true
+    because: "Inside UK applications specify where and how the new passport will be delivered"
+
+  - rule: DeliveryAndReturnOptionsOutsideUK
+    priority: 60
+    if: application_location == "outside_uk"
+    then:
+      requires_overseas_delivery_address: true
+      may_require_collection_from_post_or_consulate: true
+    because: "Outside UK applications need overseas delivery or collection details"
+
+  - rule: CoreStepsInsideUK
+    priority: 50
+    if: application_location == "inside_uk"
+    then:
+      step1_read_guidance: true
+      step2_prepare_documents: true
+      step3_complete_online_or_paper_form: true
+      step4_get_photos_and_countersignature_if_needed: true
+      step5_pay_fee_online_or_at_post_office: true
+      step6_send_documents_and_photos: true
+    because: "Typical step-by-step journey for first adult passport applications made inside the UK"
+
+  - rule: CoreStepsOutsideUK
+    priority: 50
+    if: application_location == "outside_uk"
+    then:
+      step1_check_overseas_country_guidance: true
+      step2_prepare_documents_and_translations_if_needed: true
+      step3_complete_online_form_for_overseas_application: true
+      step4_get_photos_and_countersignature_if_needed: true
+      step5_pay_fee_using_accepted_overseas_method: true
+      step6_send_documents_to_uk_or_regional_processing_centre: true
+    because: "Typical step-by-step journey for first adult passport applications made from outside the UK"
+
+  - rule: SecurityAndConfirmationSteps
+    priority: 40
+    if: true
+    then:
+      requires_declaration_confirmation: true
+      requires_digital_or_written_signature: true
+      confirms_information_is_true: true
+    because: "All applications require a signed declaration that the information supplied is accurate"

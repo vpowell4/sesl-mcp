@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SESL MCP Server - User Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-bg: #1e293b;
+            --code-bg: #f8fafc;
+            --border-color: #e2e8f0;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #334155;
+            background-color: #f8fafc;
+        }
+        
+        header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        nav {
+            background-color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        nav ul {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2rem;
+            justify-content: center;
+        }
+        
+        nav a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        
+        nav a:hover {
+            color: var(--secondary-color);
+            text-decoration: underline;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        section {
+            background: white;
+            margin-bottom: 2rem;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        h2 {
+            color: var(--primary-color);
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+        
+        h3 {
+            color: var(--secondary-color);
+            font-size: 1.5rem;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        h4 {
+            color: #475569;
+            font-size: 1.2rem;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        p {
+            margin-bottom: 1rem;
+        }
+        
+        ul, ol {
+            margin-left: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        li {
+            margin-bottom: 0.5rem;
+        }
+        
+        code {
+            background-color: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: "Courier New", monospace;
+            font-size: 0.9em;
+            color: #e11d48;
+        }
+        
+        pre {
+            background-color: var(--dark-bg);
+            color: #e2e8f0;
+            padding: 1.5rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid #334155;
+        }
+        
+        pre code {
+            background-color: transparent;
+            color: inherit;
+            padding: 0;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-right: 0.5rem;
+        }
+        
+        .badge-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        .badge-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+        
+        .badge-warning {
+            background-color: var(--warning-color);
+            color: white;
+        }
+        
+        .badge-info {
+            background-color: #06b6d4;
+            color: white;
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            border-left: 4px solid;
+        }
+        
+        .alert-info {
+            background-color: #dbeafe;
+            border-color: var(--primary-color);
+            color: #1e40af;
+        }
+        
+        .alert-success {
+            background-color: #d1fae5;
+            border-color: var(--success-color);
+            color: #065f46;
+        }
+        
+        .alert-warning {
+            background-color: #fef3c7;
+            border-color: var(--warning-color);
+            color: #92400e;
+        }
+        
+        .alert-danger {
+            background-color: #fee2e2;
+            border-color: var(--danger-color);
+            color: #991b1b;
+        }
+        
+        .tool-card {
+            background-color: #f8fafc;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .tool-card h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+        
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+        }
+        
+        .param-table th,
+        .param-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .param-table th {
+            background-color: var(--code-bg);
+            font-weight: 600;
+            color: var(--secondary-color);
+        }
+        
+        .param-table tr:hover {
+            background-color: #f1f5f9;
+        }
+        
+        .config-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1rem;
+        }
+        
+        .config-table th,
+        .config-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border: 1px solid var(--border-color);
+        }
+        
+        .config-table th {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+        }
+        
+        .config-table tr:nth-child(even) {
+            background-color: var(--code-bg);
+        }
+        
+        footer {
+            background-color: var(--dark-bg);
+            color: white;
+            text-align: center;
+            padding: 2rem;
+            margin-top: 3rem;
+        }
+        
+        footer a {
+            color: #60a5fa;
+            text-decoration: none;
+        }
+        
+        footer a:hover {
+            text-decoration: underline;
+        }
+        
+        .example-box {
+            background-color: #f0f9ff;
+            border-left: 4px solid var(--primary-color);
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .response-box {
+            background-color: #f0fdf4;
+            border-left: 4px solid var(--success-color);
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .feature-item {
+            background-color: var(--code-bg);
+            padding: 1rem;
+            border-radius: 6px;
+            border-left: 3px solid var(--primary-color);
+        }
+        
+        .feature-item h4 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+        
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.8rem;
+            }
+            
+            nav ul {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+            
+            section {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>📘 SESL MCP Server</h1>
+        <p>User Guide - Version 0.1.0</p>
+    </header>
+
+    <nav>
+        <ul>
+            <li><a href="#overview">Overview</a></li>
+            <li><a href="#installation">Installation</a></li>
+            <li><a href="#configuration">Configuration</a></li>
+            <li><a href="#tools">MCP Tools</a></li>
+            <li><a href="#examples">Examples</a></li>
+            <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <!-- OVERVIEW -->
+        <section id="overview">
+            <h2>Overview</h2>
+            
+            <p>The <strong>SESL MCP Server</strong> is a Model Context Protocol (MCP) server that exposes the SESL (Simple Expert System Language) rule engine capabilities through a standardized MCP interface. MCP is an open protocol that allows AI assistants like Claude, ChatGPT, and other clients to interact with external tools and data sources in a standardized way.</p>
+            
+            <p>This server acts as a bridge between AI assistants and the SESL rule engine, enabling you to:</p>
+            <ul>
+                <li><strong>Generate business rules</strong> from natural language descriptions (e.g., "Approve loan if credit score > 700")</li>
+                <li><strong>Validate SESL code</strong> before execution to catch syntax errors, missing fields, and logical issues</li>
+                <li><strong>Execute rule-based models</strong> with forward-chaining inference (rules fire automatically when conditions are met)</li>
+                <li><strong>Build and modify models</strong> incrementally by adding rules and test scenarios</li>
+                <li><strong>Integrate with ChatGPT</strong> seamlessly by pasting generated code directly (auto-formatting included)</li>
+            </ul>
+            
+            <p><strong>How it works:</strong> When you send a request to the MCP server (e.g., asking it to generate rules for loan approval), the server processes your request using the SESL engine and returns structured results. The server runs continuously in the background, listening for MCP tool calls over HTTP.</p>
+            
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h4>🤖 AI-Powered Generation</h4>
+                    <p>Convert natural language to SESL YAML rules automatically</p>
+                </div>
+                <div class="feature-item">
+                    <h4>✅ Validation & Linting</h4>
+                    <p>Catch errors before execution with comprehensive YAML validation</p>
+                </div>
+                <div class="feature-item">
+                    <h4>⚡ Rule Execution</h4>
+                    <p>Run forward-chaining inference on your business rules</p>
+                </div>
+                <div class="feature-item">
+                    <h4>📝 Direct Paste Support</h4>
+                    <p>Paste SESL code from ChatGPT with automatic formatting fixes</p>
+                </div>
+            </div>
+
+            <div class="alert alert-info">
+                <strong>ℹ️ What is SESL?</strong><br>
+                SESL (Simple Expert System Language) is a forward-chaining rule engine with a YAML-based DSL (Domain Specific Language) for defining business rules and policies. Unlike traditional programming where you explicitly control the flow, SESL uses <em>declarative rules</em> that fire automatically when their conditions are met.<br><br>
+                
+                <strong>Key concepts:</strong>
+                <ul style="margin-top: 0.5rem;">
+                    <li><strong>Forward-chaining:</strong> Rules are evaluated continuously; when a rule's conditions become true, it fires and adds new facts</li>
+                    <li><strong>Facts:</strong> Data objects (key-value pairs) that represent the current state (e.g., <code>{"credit_score": 750}</code>)</li>
+                    <li><strong>Rules:</strong> IF-THEN statements that transform facts (e.g., "IF credit_score > 700 THEN approve = true")</li>
+                    <li><strong>Priority:</strong> Higher priority rules fire first (useful for overrides and exceptions)</li>
+                    <li><strong>Constants:</strong> Reusable values defined once and referenced throughout rules</li>
+                </ul>
+                
+                Learn more at: <a href="https://github.com/vpowell4/sesl" target="_blank">github.com/vpowell4/sesl</a>
+            </div>
+
+            <h3>Key Features</h3>
+            <ul>
+                <li><strong>7 MCP Tools</strong> for complete SESL workflow management</li>
+                <li><strong>Auto-fix</strong> for ChatGPT-generated YAML (converts bullet points to YAML syntax)</li>
+                <li><strong>Large request support</strong> (100MB default, configurable)</li>
+                <li><strong>Comprehensive error reporting</strong> with actionable suggestions</li>
+                <li><strong>HTTP transport</strong> via FastMCP with Uvicorn</li>
+                <li><strong>Environment-based configuration</strong> for flexible deployment</li>
+            </ul>
+        </section>
+
+        <!-- INSTALLATION -->
+        <section id="installation">
+            <h2>Installation</h2>
+
+            <h3>Option 1: Clone & Run Locally (Recommended)</h3>
+            <p>This method gives you full control over the server configuration and allows you to modify the source code if needed.</p>
+            
+            <pre><code># Clone the repository from GitHub
+git clone https://github.com/vpowell4/sesl-mcp.git
+
+# Navigate into the project directory
+cd sesl-mcp
+
+# Install all dependencies (including SESL engine)
+uv sync
+
+# Start the MCP server
+uv run sesl-mcp-server</code></pre>
+
+            <p><strong>Expected output:</strong></p>
+            <pre><code>INFO:     Started server process [12345]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:3000 (Press CTRL+C to quit)
+🌟 SESL MCP Server Running...
+Endpoint: http://localhost:3000/mcp
+Use ngrok/cloudflared for remote access.</code></pre>
+            
+            <p>The server is now listening at <code>http://0.0.0.0:3000/mcp</code> and ready to accept MCP tool calls. Keep this terminal window open while using the server.</p>
+
+            <h3>Option 2: Install from GitHub</h3>
+            <p>This method installs the server globally on your system without cloning the repository. Ideal for quick setup when you don't need to modify the source code.</p>
+            
+            <pre><code># Install directly from GitHub (requires uv package manager)
+uv pip install "sesl-mcp @ git+https://github.com/vpowell4/sesl-mcp.git@main"
+
+# Run the server from anywhere
+sesl-mcp-server</code></pre>
+            
+            <p><strong>Note:</strong> After installation, the <code>sesl-mcp-server</code> command will be available globally in your terminal. You can run it from any directory.</p>
+
+            <h3>Option 3: Add as Dependency to Your Project</h3>
+            <p>Use this method when building an application that needs SESL MCP server as a dependency. This adds the server to your project's dependency list and allows you to run it alongside your application.</p>
+            
+            <pre><code># From within your uv project directory
+uv add "sesl-mcp @ git+https://github.com/vpowell4/sesl-mcp.git@main"
+
+# Run the server using your project's virtual environment
+uv run sesl-mcp-server</code></pre>
+            
+            <p><strong>Use case:</strong> Perfect for building larger applications that integrate SESL rule processing as one component among many services.</p>
+
+            <h3>Expose Server Publicly</h3>
+            <p>By default, the server only accepts connections from your local machine. To allow AI assistants or clients running on other machines to access your MCP server, you need to expose it publicly using a tunneling service. These tools create a secure tunnel from the internet to your local server.</p>
+            
+            <h4>Using Cloudflare Tunnel (Free):</h4>
+            <pre><code># Install cloudflared first: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/
+cloudflared tunnel --url http://localhost:3000</code></pre>
+            
+            <p><strong>Expected output:</strong></p>
+            <pre><code>2025-12-08T10:30:00Z INF Starting tunnel tunnelID=abc123
+2025-12-08T10:30:01Z INF Registered tunnel connection
+2025-12-08T10:30:01Z INF +--------------------------------------------------------------------------------------------+
+2025-12-08T10:30:01Z INF |  Your quick Tunnel has been created! Visit it at:                                         |
+2025-12-08T10:30:01Z INF |  https://random-words-1234.trycloudflare.com                                              |
+2025-12-08T10:30:01Z INF +--------------------------------------------------------------------------------------------+</code></pre>
+            
+            <p>Use the provided URL (e.g., <code>https://random-words-1234.trycloudflare.com/mcp</code>) to access your server remotely.</p>
+
+            <h4>Using ngrok (Free tier available):</h4>
+            <pre><code># Install ngrok first: https://ngrok.com/download
+ngrok http 3000</code></pre>
+            
+            <p><strong>Expected output:</strong></p>
+            <pre><code>Session Status                online
+Account                       your-email@example.com (Plan: Free)
+Version                       3.3.0
+Region                        United States (us)
+Forwarding                    https://a1b2c3d4.ngrok.io -> http://localhost:3000
+
+Connections                   ttl     opn     rt1     rt5     p50     p90
+                              0       0       0.00    0.00    0.00    0.00</code></pre>
+            
+            <p>Use the forwarding URL (e.g., <code>https://a1b2c3d4.ngrok.io/mcp</code>) to access your server remotely.</p>
+            
+            <div class="alert alert-warning">
+                <strong>⚠️ Security Note:</strong><br>
+                Tunneling exposes your local server to the internet. Only use this for development and testing. For production deployments, use proper authentication, HTTPS, and firewall rules.
+            </div>
+
+            <div class="alert alert-success">
+                <strong>✅ Verify Installation:</strong><br>
+                Once running, you should see:<br>
+                <code>🌟 SESL MCP Server Running... Endpoint: http://localhost:3000/mcp</code>
+            </div>
+        </section>
+
+        <!-- CONFIGURATION -->
+        <section id="configuration">
+            <h2>Configuration</h2>
+
+            <p>The SESL MCP Server supports environment-based configuration for flexible deployment:</p>
+
+            <table class="config-table">
+                <thead>
+                    <tr>
+                        <th>Environment Variable</th>
+                        <th>Description</th>
+                        <th>Default Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>SESL_MCP_HOST</code></td>
+                        <td>Server bind address</td>
+                        <td><code>0.0.0.0</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>SESL_MCP_PORT</code></td>
+                        <td>Server port number</td>
+                        <td><code>3000</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>SESL_MCP_DEBUG</code></td>
+                        <td>Enable debug logging (true/false)</td>
+                        <td><code>true</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>SESL_MCP_MAX_REQUEST_SIZE</code></td>
+                        <td>Maximum request size in bytes</td>
+                        <td><code>104857600</code> (100MB)</td>
+                    </tr>
+                    <tr>
+                        <td><code>SESL_MCP_TIMEOUT</code></td>
+                        <td>Request timeout in seconds</td>
+                        <td><code>300</code> (5 minutes)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Example Configuration</h3>
+            <pre><code># Set environment variables (Windows PowerShell)
+$env:SESL_MCP_HOST = "127.0.0.1"
+$env:SESL_MCP_PORT = "8080"
+$env:SESL_MCP_DEBUG = "false"
+$env:SESL_MCP_MAX_REQUEST_SIZE = "52428800"  # 50MB
+$env:SESL_MCP_TIMEOUT = "600"  # 10 minutes
+
+# Run server
+sesl-mcp-server</code></pre>
+
+            <div class="alert alert-warning">
+                <strong>⚠️ Production Deployment:</strong><br>
+                For production environments, consider:
+                <ul>
+                    <li>Setting <code>SESL_MCP_DEBUG=false</code> for reduced logging</li>
+                    <li>Adjusting <code>SESL_MCP_MAX_REQUEST_SIZE</code> based on your use case</li>
+                    <li>Using a reverse proxy (nginx, Apache) for SSL/TLS termination</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- TOOLS -->
+        <section id="tools">
+            <h2>MCP Tools</h2>
+            <p>The SESL MCP Server exposes 7 tools through the MCP interface:</p>
+
+            <!-- TOOL 1: generate_sesl -->
+            <div class="tool-card">
+                <h3>1. generate_sesl <span class="badge badge-primary">Generator</span></h3>
+                <p>Generates a SESL prompt template for converting natural language descriptions into valid SESL YAML.</p>
+
+                <h4>Parameters</h4>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Required</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>prompt</code></td>
+                            <td>string</td>
+                            <td>✅ Yes</td>
+                            <td>Natural language description of business rules or policies</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>Returns</h4>
+                <p>Complete prompt template with SESL specification, error prevention guidelines, and examples.</p>
+
+                <div class="example-box">
+                    <strong>📋 Example Request:</strong>
+                    <pre><code>{
+  "tool": "generate_sesl",
+  "arguments": {
+    "prompt": "Create rules to approve a loan if credit score > 700 and income > 50000"
+  }
+}</code></pre>
+                </div>
+
+                <div class="response-box">
+                    <strong>📤 Example Response:</strong>
+                    <p>Returns a comprehensive template (2000+ characters) that you can send to an LLM like ChatGPT or Claude. The template includes:</p>
+                    <ul>
+                        <li><strong>Complete SESL specification (10 sections):</strong> File structure, rule syntax, YAML formatting rules, condition syntax, LET variables, field references, THEN blocks, data types, priorities, and facts</li>
+                        <li><strong>Error prevention checklist:</strong> Common mistakes to avoid (YAML syntax errors, condition formatting, variable usage, required fields)</li>
+                        <li><strong>Working example:</strong> A complete, runnable SESL model demonstrating all features</li>
+                        <li><strong>Your prompt:</strong> Integrated into the template as the goal for code generation</li>
+                    </ul>
+                    
+                    <p><strong>Typical usage flow:</strong></p>
+                    <ol>
+                        <li>Call <code>generate_sesl</code> with your requirements</li>
+                        <li>Copy the returned template</li>
+                        <li>Send it to ChatGPT/Claude (e.g., "Here's a SESL template. Generate the code: [paste template]")</li>
+                        <li>LLM returns valid SESL YAML that you can save with <code>add_model</code></li>
+                    </ol>
+                    
+                    <p><em>Sample output snippet:</em></p>
+                    <pre><code>Generate SESL YAML for the following requirement:
+
+Create rules to approve a loan if credit score > 700 and income > 50000
+
+=== SESL SPECIFICATION ===
+
+1. FILE STRUCTURE
+Every SESL file must have this structure:
+  const:        # Optional: define reusable constants
+  rules:        # Required: list of rules
+  facts:        # Optional: test scenarios
+
+2. RULE STRUCTURE
+Each rule must have:
+  - rule: unique_name
+    priority: number (higher = fires first)
+    if: [conditions]
+    then: [actions]
+    because: "explanation"
+
+...</code></pre>
+                </div>
+            </div>
+
+            <!-- TOOL 2: lint_sesl -->
+            <div class="tool-card">
+                <h3>2. lint_sesl <span class="badge badge-warning">Validator</span></h3>
+                <p>Validates SESL YAML and returns structured error/warning messages.</p>
+
+                <h4>Parameters</h4>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Required</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>contents</code></td>
+                            <td>List[Any]</td>
+                            <td>✅ Yes</td>
+                            <td>SESL YAML content (TextContent, dicts, or strings)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>Returns</h4>
+                <p>List of TextContent with validation issues including level (ERROR/WARNING), message, rule, and details.</p>
+
+                <div class="example-box">
+                    <strong>📋 Example Request:</strong>
+                    <pre><code>{
+  "tool": "lint_sesl",
+  "arguments": {
+    "contents": [
+      {
+        "type": "text",
+        "text": "const:\\n  MIN_SCORE: 700\\nrules:\\n  - rule: approve_loan\\n..."
+      }
+    ]
+  }
+}</code></pre>
+                </div>
+
+                <div class="response-box">
+                    <strong>📤 Example Response (with errors):</strong>
+                    <pre><code>[
+  {
+    "type": "text",
+    "text": {
+      "issues": [
+        {
+          "level": "ERROR",
+          "message": "Missing required field 'priority'",
+          "rule": "approve_loan",
+          "details": {
+            "error_type": "ValidationError",
+            "field": "priority",
+            "suggestion": "Add 'priority: 100' to the rule definition"
+          }
+        },
+        {
+          "level": "WARNING",
+          "message": "Rule has no 'because' field",
+          "rule": "check_income",
+          "details": {
+            "suggestion": "Add explanatory text for documentation"
+          }
+        }
+      ]
+    }
+  }
+]</code></pre>
+                    
+                    <strong>📤 Example Response (no errors):</strong>
+                    <pre><code>[
+  {
+    "type": "text",
+    "text": {
+      "issues": []
+    }
+  }
+]</code></pre>
+                    
+                    <p><strong>Understanding the response:</strong></p>
+                    <ul>
+                        <li><strong>Empty issues array:</strong> Your SESL is valid and ready to execute</li>
+                        <li><strong>ERROR level:</strong> Critical issues that will prevent execution - must fix these</li>
+                        <li><strong>WARNING level:</strong> Best practice violations - code will run but may not be optimal</li>
+                        <li><strong>details object:</strong> Additional context including error type and actionable suggestions</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- TOOL 3: run_sesl -->
+            <div class="tool-card">
+                <h3>3. run_sesl <span class="badge badge-success">Executor</span></h3>
+                <p>Executes SESL rules with provided facts and returns computed results.</p>
+
+                <h4>Parameters</h4>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Required</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>contents</code></td>
+                            <td>List[Any]</td>
+                            <td>✅ Yes</td>
+                            <td>SESL YAML model definition</td>
+                        </tr>
+                        <tr>
+                            <td><code>facts</code></td>
+                            <td>Dict[str, Any]</td>
+                            <td>✅ Yes</td>
+                            <td>Input facts for rule execution</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>Returns</h4>
+                <p>Execution results including final facts, rules fired, and execution metadata.</p>
+
+                <div class="example-box">
+                    <strong>📋 Example Request:</strong>
+                    <pre><code>{
+  "tool": "run_sesl",
+  "arguments": {
+    "contents": ["const:\\n  MIN_SCORE: 700\\n..."],
+    "facts": {
+      "credit_score": 750,
+      "annual_income": 60000
+    }
+  }
+}</code></pre>
+                </div>
+
+                <div class="response-box">
+                    <strong>📤 Example Response (successful execution):</strong>
+                    <pre><code>[
+  {
+    "type": "text",
+    "text": {
+      "results": {
+        "credit_score": 750,
+        "annual_income": 60000,
+        "debt_to_income": 0.35,
+        "loan_approved": true,
+        "approval_reason": "Meets credit and income requirements",
+        "max_loan_amount": 250000
+      },
+      "metadata": {
+        "rules_fired": ["calculate_dti", "approve_loan", "calculate_max_loan"],
+        "execution_stages": ["lint", "load", "build_facts", "execute"],
+        "total_rules": 5,
+        "rules_evaluated": 5,
+        "execution_time_ms": 45,
+        "success": true
+      }
+    }
+  }
+]</code></pre>
+                    
+                    <p><strong>Understanding the response:</strong></p>
+                    <ul>
+                        <li><strong>results object:</strong> Contains both your original input facts AND new facts added by rules</li>
+                        <li><strong>rules_fired array:</strong> Shows which rules executed, in the order they fired (useful for debugging)</li>
+                        <li><strong>execution_stages:</strong> Confirms all processing stages completed successfully</li>
+                        <li><strong>New fields:</strong> Any field that appears in results but wasn't in your input facts was created by a rule (e.g., <code>loan_approved</code>, <code>max_loan_amount</code>)</li>
+                    </ul>
+                    
+                    <strong>📤 Example Response (execution error):</strong>
+                    <pre><code>[
+  {
+    "type": "text",
+    "text": {
+      "error": "Execution failed during stage: execute",
+      "error_type": "RuntimeError",
+      "stage": "execute",
+      "details": "Division by zero in rule 'calculate_ratio'",
+      "suggestion": "Add condition to check denominator is not zero",
+      "metadata": {
+        "rules_fired_before_error": ["validate_input"],
+        "failed_at_rule": "calculate_ratio"
+      }
+    }
+  }
+]</code></pre>
+                </div>
+            </div>
+
+            <!-- TOOL 4: add_model -->
+            <div class="tool-card">
+                <h3>4. add_model <span class="badge badge-info">Creator</span></h3>
+                <p>Save a complete SESL model to a file. Supports direct paste from ChatGPT with automatic formatting fixes.</p>
+
+                <h4>Parameters</h4>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Required</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>sesl_yaml</code></td>
+                            <td>string</td>
+                            <td>✅ Yes</td>
+                            <td>Complete SESL YAML content (rules, const, etc.)</td>
+                        </tr>
+                        <tr>
+                            <td><code>name</code></td>
+                            <td>string</td>
+                            <td>❌ No</td>
+                            <td>Filename without extension (default: "model")</td>
+                        </tr>
+                        <tr>
+                            <td><code>auto_fix</code></td>
+                            <td>boolean</td>
+                            <td>❌ No</td>
+                            <td>Auto-fix ChatGPT formatting issues (default: true)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>Returns</h4>
+                <p>Success status, file path, and metadata about the saved model.</p>
+
+                <div class="example-box">
+                    <strong>📋 Example Request:</strong>
+                    <pre><code>{
+  "tool": "add_model",
+  "arguments": {
+    "sesl_yaml": "const:\\n* MIN_SCORE: 700\\nrules:\\n* rule: approve\\n...",
+    "name": "loan_approval",
+    "auto_fix": true
+  }
+}</code></pre>
+                </div>
+
+                <div class="response-box">
+                    <strong>📤 Example Response (success):</strong>
+                    <pre><code>{
+  "success": true,
+  "file_path": "C:\\Users\\vince\\Documents\\sesl-mcp\\loan_approval.sesl",
+  "file_name": "loan_approval.sesl",
+  "content_length": 342,
+  "auto_fixed": true,
+  "message": "SESL model saved to loan_approval.sesl"
+}</code></pre>
+                    
+                    <p><strong>Field explanations:</strong></p>
+                    <ul>
+                        <li><strong>file_path:</strong> Absolute path where the file was saved (current working directory)</li>
+                        <li><strong>content_length:</strong> Size of saved content in bytes</li>
+                        <li><strong>auto_fixed:</strong> <code>true</code> if ChatGPT bullet points were converted to YAML syntax, <code>false</code> if no changes needed</li>
+                    </ul>
+                    
+                    <strong>📤 Example Response (error - invalid YAML):</strong>
+                    <pre><code>{
+  "success": false,
+  "error": "Invalid YAML syntax",
+  "error_type": "YAMLError",
+  "details": "mapping values are not allowed here\n  in \"<unicode string>\", line 5, column 15",
+  "suggestion": "Check YAML formatting: indentation, colons, dashes. Line 5 likely has incorrect spacing or missing colon."
+}</code></pre>
+                    
+                    <p><strong>Common errors and fixes:</strong></p>
+                    <ul>
+                        <li><strong>"mapping values are not allowed":</strong> Missing space after colon (should be <code>key: value</code> not <code>key:value</code>)</li>
+                        <li><strong>"expected &lt;block end&gt;":</strong> Indentation problem - ensure consistent spaces (not tabs)</li>
+                        <li><strong>File already exists:</strong> The tool will overwrite existing files - use different names or backup first</li>
+                    </ul>
+                </div>
+
+                <div class="alert alert-info">
+                    <strong>💡 ChatGPT Support:</strong><br>
+                    The <code>auto_fix</code> feature automatically converts ChatGPT's bullet points (* and •) to YAML list syntax (-), preserving indentation.
+                </div>
+            </div>
+
+            <!-- TOOL 5: add_scenario -->
+            <div class="tool-card">
+                <h3>5. add_scenario <span class="badge badge-info">Editor</span></h3>
+                <p>Add test scenarios (facts) to an existing SESL model file.</p>
+
+                <h4>Parameters</h4>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Required</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>model_file</code></td>
+                            <td>string</td>
+                            <td>✅ Yes</td>
+                            <td>Path to existing SESL model file (e.g., "model.sesl")</td>
+                        </tr>
+                        <tr>
+                            <td><code>scenario_yaml</code></td>
+                            <td>string</td>
+                            <td>✅ Yes</td>
+                            <td>YAML content for the scenario (dict or list)</td>
+                        </tr>
+                        <tr>
+                            <td><code>auto_fix</code></td>
+                            <td>boolean</td>
+                            <td>❌ No</td>
+                            <td>Auto-fix ChatGPT formatting (default: true)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>Returns</h4>
+                <p>Success status, number of scenarios added, and total scenario count.</p>
+
+                <div class="example-box">
+                    <strong>📋 Example Request:</strong>
+                    <pre><code>{
+  "tool": "add_scenario",
+  "arguments": {
+    "model_file": "loan_approval.sesl",
+    "scenario_yaml": "credit_score: 800\\nannual_income: 75000"
+  }
+}</code></pre>
+                </div>
+
+                <div class="response-box">
+                    <strong>📤 Example Response (success):</strong>
+                    <pre><code>{
+  "success": true,
+  "file_path": "C:\\Users\\vince\\Documents\\sesl-mcp\\loan_approval.sesl",
+  "scenarios_added": 1,
+  "total_scenarios": 3,
+  "message": "Added 1 scenario(s) to loan_approval.sesl"
+}</code></pre>
+                    
+                    <p><strong>Understanding the response:</strong></p>
+                    <ul>
+                        <li><strong>scenarios_added:</strong> How many test scenarios were added in this operation (can be >1 if you provide a YAML list)</li>
+                        <li><strong>total_scenarios:</strong> Total count of scenarios in the file after adding (helps track test coverage)</li>
+                    </ul>
+                    
+                    <p><strong>What happens to the file:</strong> The tool loads your existing model, parses the scenario YAML, appends it to the <code>facts</code> array, and writes the updated model back to disk. Original formatting is preserved where possible.</p>
+                    
+                    <strong>📤 Example Response (error - file not found):</strong>
+                    <pre><code>{
+  "success": false,
+  "error": "Model file not found: loan_approval.sesl",
+  "suggestion": "Use add_model first to create the SESL model file",
+  "searched_path": "C:\\Users\\vince\\Documents\\sesl-mcp\\loan_approval.sesl"
+}</code></pre>
+                    
+                    <p><strong>Tip:</strong> You can add multiple scenarios at once by providing a YAML list:</p>
+                    <pre><code>scenario_yaml: |-
+  - credit_score: 800
+    annual_income: 100000
+  - credit_score: 650
+    annual_income: 45000
+  - credit_score: 720
+    annual_income: 62000</code></pre>
+                </div>
+            </div>
+
+            <!-- TOOL 6: add_rule -->
+            <div class="tool-card">
+                <h3>6. add_rule <span class="badge badge-info">Editor</span></h3>
+                <p>Add a new rule to an existing SESL model file.</p>
+
+                <h4>Parameters</h4>
+                <table class="param-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Required</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>model_file</code></td>
+                            <td>string</td>
+                            <td>✅ Yes</td>
+                            <td>Path to existing SESL model file (e.g., "model.sesl")</td>
+                        </tr>
+                        <tr>
+                            <td><code>rule_yaml</code></td>
+                            <td>string</td>
+                            <td>✅ Yes</td>
+                            <td>YAML content for the rule (must have 'rule' key)</td>
+                        </tr>
+                        <tr>
+                            <td><code>auto_fix</code></td>
+                            <td>boolean</td>
+                            <td>❌ No</td>
+                            <td>Auto-fix ChatGPT formatting (default: true)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>Returns</h4>
+                <p>Success status, number of rules added, and total rule count.</p>
+
+                <div class="example-box">
+                    <strong>📋 Example Request:</strong>
+                    <pre><code>{
+  "tool": "add_rule",
+  "arguments": {
+    "model_file": "loan_approval.sesl",
+    "rule_yaml": "rule: high_value_approval\\npriority: 10\\nif:\\n  - credit_score > 800\\nthen:\\n  - approved: true"
+  }
+}</code></pre>
+                </div>
+
+                <div class="response-box">
+                    <strong>📤 Example Response (success):</strong>
+                    <pre><code>{
+  "success": true,
+  "file_path": "C:\\Users\\vince\\Documents\\sesl-mcp\\loan_approval.sesl",
+  "rules_added": 1,
+  "total_rules": 5,
+  "message": "Added 1 rule(s) to loan_approval.sesl"
+}</code></pre>
+                    
+                    <p><strong>Understanding the response:</strong></p>
+                    <ul>
+                        <li><strong>rules_added:</strong> How many rules were added in this operation</li>
+                        <li><strong>total_rules:</strong> Total count of rules in the model after adding</li>
+                    </ul>
+                    
+                    <strong>📤 Example Response (error - invalid rule format):</strong>
+                    <pre><code>{
+  "success": false,
+  "error": "Invalid rule format: must have 'rule' key",
+  "suggestion": "Each rule must have: rule, priority, if, then, because"
+}</code></pre>
+                    
+                    <p><strong>Required rule structure:</strong> Every SESL rule must be a dictionary with these fields:</p>
+                    <pre><code>rule: unique_rule_name        # Required: identifier for the rule
+priority: 100                 # Required: number (higher fires first)
+if:                          # Required: list of conditions
+  - condition1
+  - condition2
+then:                        # Required: list of actions
+  - field: value
+because: "explanation"        # Required: human-readable reason</code></pre>
+                    
+                    <p><strong>Priority guidelines:</strong></p>
+                    <ul>
+                        <li><strong>1000+:</strong> Critical overrides and exceptions</li>
+                        <li><strong>500-999:</strong> High-priority business logic</li>
+                        <li><strong>100-499:</strong> Standard rules</li>
+                        <li><strong>1-99:</strong> Default/fallback rules</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- TOOL 7: server_info -->
+            <div class="tool-card">
+                <h3>7. server_info <span class="badge badge-success">Status</span></h3>
+                <p>Get server version, status, and available tools.</p>
+
+                <h4>Parameters</h4>
+                <p><em>No parameters required</em></p>
+
+                <h4>Returns</h4>
+                <p>Server metadata including version, status, and tool list.</p>
+
+                <div class="example-box">
+                    <strong>📋 Example Request:</strong>
+                    <pre><code>{
+  "tool": "server_info",
+  "arguments": {}
+}</code></pre>
+                </div>
+
+                <div class="response-box">
+                    <strong>📤 Example Response:</strong>
+                    <pre><code>{
+  "name": "sesl-mcp-server",
+  "version": "0.1.0",
+  "status": "running",
+  "tools": [
+    "generate_sesl",
+    "lint_sesl",
+    "run_sesl",
+    "add_model",
+    "add_scenario",
+    "add_rule",
+    "server_info"
+  ],
+  "sesl_engine": "https://github.com/vpowell4/sesl"
+}</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- EXAMPLES -->
+        <section id="examples">
+            <h2>Examples</h2>
+
+            <h3>Complete Workflow Example</h3>
+            <p>Here's a complete example of creating, validating, and executing a SESL model:</p>
+
+            <h4>Step 1: Generate SESL Template</h4>
+            <p><strong>Goal:</strong> Get a comprehensive template that teaches an LLM how to write valid SESL code.</p>
+            
+            <pre><code># Call generate_sesl tool via MCP
+{
+  "tool": "generate_sesl",
+  "arguments": {
+    "prompt": "Create a loan approval system that approves loans if credit score > 700 and debt-to-income ratio < 0.4"
+  }
+}
+
+# The tool returns a 2000+ character template</code></pre>
+            
+            <p><strong>What you get back:</strong> A detailed template containing:</p>
+            <ul>
+                <li>Complete SESL syntax specification</li>
+                <li>Error prevention checklist</li>
+                <li>Working example code</li>
+                <li>Your prompt integrated as the generation goal</li>
+            </ul>
+            
+            <p><strong>Next step:</strong> Copy the entire template and send it to ChatGPT or Claude with a message like: "Using this template, generate the SESL code as specified."</p>
+
+            <h4>Step 2: Save the Model</h4>
+            <p><strong>Goal:</strong> Save the ChatGPT-generated SESL code to a file. The tool automatically fixes formatting issues.</p>
+            
+            <pre><code># Call add_model tool (paste ChatGPT output directly - even with bullet points!)
+{
+  "tool": "add_model",
+  "arguments": {
+    "sesl_yaml": "const:\n  MIN_CREDIT_SCORE: 700\n  MAX_DTI: 0.4\n\nrules:\n  - rule: approve_loan\n    priority: 100\n    if:\n      - credit_score >= MIN_CREDIT_SCORE\n      - debt_to_income < MAX_DTI\n    then:\n      - loan_approved: true\n    because: \"Credit score and DTI meet requirements\"",
+    "name": "loan_approval"
+  }
+}
+
+# Response:
+# {
+#   "success": true,
+#   "file_path": "C:\\Users\\vince\\Documents\\sesl-mcp\\loan_approval.sesl",
+#   "file_name": "loan_approval.sesl",
+#   "content_length": 289,
+#   "auto_fixed": false,  # No fixes needed - YAML was already valid
+#   "message": "SESL model saved to loan_approval.sesl"
+# }</code></pre>
+            
+            <p><strong>What happens:</strong></p>
+            <ol>
+                <li>Tool validates the YAML syntax</li>
+                <li>If <code>auto_fix=true</code> (default), converts any * or • bullets to - (YAML list syntax)</li>
+                <li>Saves to <code>loan_approval.sesl</code> in your current directory</li>
+                <li>Returns success confirmation with file path</li>
+            </ol>
+            
+            <p><strong>Important:</strong> The file is created in your current working directory (where you ran the server from). Use absolute paths if you need to save elsewhere.</p>
+
+            <h4>Step 3: Add Test Scenario</h4>
+            <p><strong>Goal:</strong> Add test data to verify your rules work correctly. This is essential for testing before production use.</p>
+            
+            <pre><code># Call add_scenario tool
+{
+  "tool": "add_scenario",
+  "arguments": {
+    "model_file": "loan_approval.sesl",
+    "scenario_yaml": "credit_score: 750\ndebt_to_income: 0.35\nannual_income: 80000"
+  }
+}
+
+# Response:
+# {
+#   "success": true,
+#   "file_path": "C:\\Users\\vince\\Documents\\sesl-mcp\\loan_approval.sesl",
+#   "scenarios_added": 1,
+#   "total_scenarios": 1,
+#   "message": "Added 1 scenario(s) to loan_approval.sesl"
+# }</code></pre>
+            
+            <p><strong>What this does:</strong> The scenario (test case) is added to the <code>facts</code> section of your SESL file. You can now use this scenario to test that your rules produce expected results.</p>
+            
+            <p><strong>Best practice:</strong> Add multiple scenarios covering:</p>
+            <ul>
+                <li>Happy path (should approve): <code>credit_score: 750, debt_to_income: 0.35</code></li>
+                <li>Edge cases (boundary conditions): <code>credit_score: 700, debt_to_income: 0.4</code></li>
+                <li>Rejection cases (should deny): <code>credit_score: 650, debt_to_income: 0.5</code></li>
+            </ul>
+
+            <h4>Step 4: Validate the Model</h4>
+            <p><strong>Goal:</strong> Check for syntax errors, missing fields, and validation issues before attempting execution.</p>
+            
+            <pre><code># First, read the file contents (you'd do this programmatically)
+# Then call lint_sesl tool
+{
+  "tool": "lint_sesl",
+  "arguments": {
+    "contents": [
+      {
+        "type": "text",
+        "text": "const:\n  MIN_CREDIT_SCORE: 700\n  MAX_DTI: 0.4\n\nrules:\n  - rule: approve_loan\n    priority: 100\n    if:\n      - credit_score >= MIN_CREDIT_SCORE\n      - debt_to_income < MAX_DTI\n    then:\n      - loan_approved: true\n    because: 'Credit score and DTI meet requirements'\n\nfacts:\n  - credit_score: 750\n    debt_to_income: 0.35"
+      }
+    ]
+  }
+}
+
+# Response (no errors - ready to execute!):
+# [
+#   {
+#     "type": "text",
+#     "text": {
+#       "issues": []
+#     }
+#   }
+# ]</code></pre>
+            
+            <p><strong>What gets validated:</strong></p>
+            <ul>
+                <li>YAML syntax (indentation, colons, quotes)</li>
+                <li>Required fields (rule name, priority, if, then, because)</li>
+                <li>Condition syntax (operators, field references)</li>
+                <li>Constant definitions and usage</li>
+                <li>Data type consistency</li>
+            </ul>
+            
+            <p><strong>If errors are found:</strong> The response will include detailed issue descriptions with suggestions. Fix these before proceeding to execution.</p>
+
+            <h4>Step 5: Execute the Rules</h4>
+            <p><strong>Goal:</strong> Run the forward-chaining inference engine to see what conclusions the rules reach based on your input facts.</p>
+            
+            <pre><code># Call run_sesl tool with your model and input facts
+{
+  "tool": "run_sesl",
+  "arguments": {
+    "contents": [
+      {
+        "type": "text",
+        "text": "const:\n  MIN_CREDIT_SCORE: 700\n  MAX_DTI: 0.4\n\nrules:\n  - rule: approve_loan\n    priority: 100\n    if:\n      - credit_score >= MIN_CREDIT_SCORE\n      - debt_to_income < MAX_DTI\n    then:\n      - loan_approved: true\n    because: 'Credit score and DTI meet requirements'"
+      }
+    ],
+    "facts": {
+      "credit_score": 750,
+      "debt_to_income": 0.35,
+      "annual_income": 80000
+    }
+  }
+}
+
+# Response (successful execution):
+# [
+#   {
+#     "type": "text",
+#     "text": {
+#       "results": {
+#         "credit_score": 750,           # Original input
+#         "debt_to_income": 0.35,        # Original input
+#         "annual_income": 80000,        # Original input
+#         "loan_approved": true          # Added by the rule!
+#       },
+#       "metadata": {
+#         "rules_fired": ["approve_loan"],  # This rule executed
+#         "execution_stages": ["lint", "load", "build_facts", "execute"],
+#         "total_rules": 1,
+#         "rules_evaluated": 1,
+#         "success": true
+#       }
+#     }
+#   }
+# ]</code></pre>
+            
+            <p><strong>How execution works:</strong></p>
+            <ol>
+                <li><strong>Lint:</strong> Validates YAML syntax and structure</li>
+                <li><strong>Load:</strong> Parses the model and builds the rule engine</li>
+                <li><strong>Build facts:</strong> Initializes the fact base with your input data</li>
+                <li><strong>Execute:</strong> Runs forward-chaining inference:
+                    <ul>
+                        <li>Evaluates all rule conditions against current facts</li>
+                        <li>Fires rules whose conditions are true (highest priority first)</li>
+                        <li>Adds new facts from THEN clauses</li>
+                        <li>Re-evaluates rules with new facts (chaining)</li>
+                        <li>Continues until no more rules can fire</li>
+                    </ul>
+                </li>
+            </ol>
+            
+            <p><strong>Interpreting results:</strong></p>
+            <ul>
+                <li><strong>Original facts remain:</strong> Input data is preserved in results</li>
+                <li><strong>New facts added:</strong> Any field in results that wasn't in input was created by a rule</li>
+                <li><strong>rules_fired:</strong> Shows execution order (useful for debugging cascading rules)</li>
+                <li><strong>Chaining example:</strong> Rule A adds <code>eligible: true</code> → Rule B (which requires <code>eligible: true</code>) then fires → Rule B adds <code>discount: 10%</code></li>
+            </ul>
+
+            <h3>ChatGPT Paste Example</h3>
+            <p>When ChatGPT generates SESL with bullet points, the auto-fix feature handles conversion:</p>
+
+            <div class="example-box">
+                <strong>📋 ChatGPT Output (with bullets):</strong>
+                <pre><code>const:
+* MIN_SCORE: 700
+* MAX_AGE: 65
+
+rules:
+* rule: eligibility_check
+  priority: 100
+  if:
+  * age < MAX_AGE
+  * credit_score > MIN_SCORE
+  then:
+  * eligible: true</code></pre>
+            </div>
+
+            <div class="response-box">
+                <strong>📤 After Auto-Fix (valid YAML):</strong>
+                <pre><code>const:
+- MIN_SCORE: 700
+- MAX_AGE: 65
+
+rules:
+- rule: eligibility_check
+  priority: 100
+  if:
+  - age < MAX_AGE
+  - credit_score > MIN_SCORE
+  then:
+  - eligible: true</code></pre>
+            </div>
+
+            <div class="alert alert-success">
+                <strong>✅ Just paste it!</strong><br>
+                No manual editing required - the <code>auto_fix</code> feature (enabled by default) handles the conversion automatically.
+            </div>
+        </section>
+
+        <!-- TROUBLESHOOTING -->
+        <section id="troubleshooting">
+            <h2>Troubleshooting</h2>
+
+            <h3>Common Issues</h3>
+
+            <div class="tool-card">
+                <h4>❌ Server won't start</h4>
+                <p><strong>Symptoms:</strong> Import errors, module not found</p>
+                <p><strong>Solutions:</strong></p>
+                <ul>
+                    <li>Ensure dependencies are installed: <code>uv sync</code></li>
+                    <li>Check Python version: Requires Python 3.10+</li>
+                    <li>Verify SESL is installed: <code>uv pip list | grep sesl</code></li>
+                </ul>
+            </div>
+
+            <div class="tool-card">
+                <h4>❌ Port already in use</h4>
+                <p><strong>Symptoms:</strong> <code>Address already in use</code> error</p>
+                <p><strong>Solutions:</strong></p>
+                <ul>
+                    <li>Change port: <code>$env:SESL_MCP_PORT = "8080"</code></li>
+                    <li>Find process using port 3000: <code>netstat -ano | findstr :3000</code></li>
+                    <li>Kill process: <code>taskkill /PID &lt;pid&gt; /F</code></li>
+                </ul>
+            </div>
+
+            <div class="tool-card">
+                <h4>❌ Request too large</h4>
+                <p><strong>Symptoms:</strong> <code>413 Payload Too Large</code> error</p>
+                <p><strong>Solutions:</strong></p>
+                <ul>
+                    <li>Increase limit: <code>$env:SESL_MCP_MAX_REQUEST_SIZE = "209715200"</code> (200MB)</li>
+                    <li>Check content size before sending</li>
+                    <li>Split large models into smaller chunks</li>
+                </ul>
+            </div>
+
+            <div class="tool-card">
+                <h4>❌ YAML parsing errors</h4>
+                <p><strong>Symptoms:</strong> <code>YAMLError: Invalid syntax</code></p>
+                <p><strong>Solutions:</strong></p>
+                <ul>
+                    <li>Use <code>lint_sesl</code> tool to get detailed error messages</li>
+                    <li>Check indentation (use spaces, not tabs)</li>
+                    <li>Ensure colons have spaces after them: <code>key: value</code></li>
+                    <li>Quote strings with special characters: <code>"value: with: colons"</code></li>
+                    <li>Enable auto-fix when using <code>add_model</code>, <code>add_rule</code>, or <code>add_scenario</code></li>
+                </ul>
+            </div>
+
+            <div class="tool-card">
+                <h4>❌ Rules not firing</h4>
+                <p><strong>Symptoms:</strong> Execution completes but expected results missing</p>
+                <p><strong>Solutions:</strong></p>
+                <ul>
+                    <li>Check rule priorities (higher numbers fire first)</li>
+                    <li>Verify conditions match your facts exactly</li>
+                    <li>Review <code>rules_fired</code> in metadata to see which rules executed</li>
+                    <li>Use <code>lint_sesl</code> to catch validation errors</li>
+                    <li>Check for typos in field names and constants</li>
+                </ul>
+            </div>
+
+            <h3>Debug Mode</h3>
+            <p>Enable detailed logging for troubleshooting:</p>
+            <pre><code>$env:SESL_MCP_DEBUG = "true"
+sesl-mcp-server
+
+# Check logs for detailed execution traces</code></pre>
+
+            <h3>Getting Help</h3>
+            <div class="alert alert-info">
+                <strong>📧 Need more help?</strong><br>
+                <ul>
+                    <li>Check the SESL documentation: <a href="https://github.com/vpowell4/sesl" target="_blank">github.com/vpowell4/sesl</a></li>
+                    <li>Report issues: <a href="https://github.com/vpowell4/sesl-mcp/issues" target="_blank">github.com/vpowell4/sesl-mcp/issues</a></li>
+                    <li>View server logs in debug mode for detailed error information</li>
+                </ul>
+            </div>
+        </section>
+    </div>
+
+    <footer>
+        <p><strong>SESL MCP Server</strong> - Version 0.1.0</p>
+        <p>
+            <a href="https://github.com/vpowell4/sesl-mcp" target="_blank">GitHub Repository</a> | 
+            <a href="https://github.com/vpowell4/sesl" target="_blank">SESL Engine</a>
+        </p>
+        <p style="margin-top: 1rem; opacity: 0.8;">Built with FastMCP & SESL</p>
+    </footer>
+</body>
+</html>

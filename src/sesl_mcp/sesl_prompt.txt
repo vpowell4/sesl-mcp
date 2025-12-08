@@ -199,12 +199,19 @@ Required Fields:
   ☐ Priority is integer
 
 ═══════════════════════════════════════════════════════════════════════════════
-EXAMPLE
+EXAMPLE - PROPER FORMATTING
 ═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL: Follow this exact indentation pattern!
 
 const:
   MIN_AGE: 18
   VIP_THRESHOLD: 700
+  UK_COUNTRIES:
+    - "England"
+    - "Scotland"
+    - "Wales"
+    - "Northern Ireland"
 
 rules:
   - rule: CheckAdult
@@ -229,8 +236,33 @@ rules:
       discount: 0.15
     because: "Customer qualifies for VIP status"
 
-  - rule: RegularCustomer
+  - rule: UKLocation
+    priority: 85
+    if:
+      any:
+        - country in UK_COUNTRIES
+        - country == "UK"
+    then:
+      location: "inside_uk"
+    because: "Applicant is in the United Kingdom"
+
+  - rule: ComplexEligibility
     priority: 80
+    if:
+      all:
+        - age >= 16
+        - any:
+            - country in UK_COUNTRIES
+            - has_special_status == true
+        - not:
+            - is_blocked == true
+    then:
+      eligible: true
+      review_required: false
+    because: "Meets all eligibility criteria"
+
+  - rule: RegularCustomer
+    priority: 70
     if:
       any:
         - user.age < 25
@@ -239,3 +271,22 @@ rules:
       tier: "REGULAR"
       discount: 0.05
     because: "Standard customer classification"
+
+INDENTATION RULES TO MEMORIZE:
+  - 'rules:' at column 0 (top level)
+  - '- rule: RuleName' at column 2 (2 spaces)
+  - 'priority:', 'if:', 'then:', 'because:' at column 4 (4 spaces)
+  - 'all:', 'any:', 'not:' at column 6 (6 spaces) when under 'if:'
+  - Condition items under 'all/any/not' at column 8 (8 spaces)
+  - Field assignments under 'then:' at column 6 (6 spaces)
+  
+ALWAYS use '- ' (dash-space) for list items:
+  ✓ rules:
+      - rule: Name          <-- dash-space before 'rule:'
+  ✓ if:
+      all:
+        - condition1        <-- dash-space before condition
+        - condition2
+  ✓ const:
+      COUNTRIES:
+        - "England"         <-- dash-space before list item

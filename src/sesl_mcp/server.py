@@ -82,13 +82,21 @@ def _fix_chatgpt_yaml(text: str) -> str:
     """
     Fix common YAML formatting issues from ChatGPT output.
     - Converts bullet points (* or •) to YAML list items (-)
-    - Ensures proper indentation
+    - Fixes common indentation issues
+    - Adds missing colons after keys
     - Preserves quoted strings
     """
     lines = text.split('\n')
     fixed_lines = []
+    prev_indent = 0
+    in_rule = False
     
-    for line in lines:
+    for i, line in enumerate(lines):
+        # Skip empty lines
+        if not line.strip():
+            fixed_lines.append(line)
+            continue
+            
         # Count leading spaces
         stripped = line.lstrip()
         indent = len(line) - len(stripped)
@@ -96,10 +104,41 @@ def _fix_chatgpt_yaml(text: str) -> str:
         # Replace * or • at start of content with -
         if stripped.startswith('* '):
             fixed_lines.append(' ' * indent + '- ' + stripped[2:])
+            continue
         elif stripped.startswith('• '):
             fixed_lines.append(' ' * indent + '- ' + stripped[2:])
-        else:
-            fixed_lines.append(line)
+            continue
+        
+        # Detect rule keywords that need proper indentation
+        if stripped.startswith('rule:'):
+            in_rule = True
+            # Ensure it's a list item under 'rules:'
+            if i > 0 and not fixed_lines[-1].strip().startswith('-'):
+                fixed_lines.append('  - ' + stripped)
+            else:
+                fixed_lines.append(line)
+            continue
+        
+        # Fix keys that should have colons but might be missing them
+        # Common rule fields: priority, if, then, because, all, any, not
+        rule_keywords = ['priority', 'if', 'then', 'because', 'all', 'any', 'not']
+        
+        if in_rule:
+            # Check if line is a rule keyword without a colon
+            for keyword in rule_keywords:
+                if stripped == keyword or (stripped.startswith(keyword + ' ') and ':' not in stripped.split()[0]):
+                    # Add colon
+                    fixed_lines.append(' ' * indent + keyword + ':')
+                    continue
+        
+        # Preserve the line as-is if no fixes needed
+        fixed_lines.append(line)
+        
+        # Track if we left a rule block
+        if in_rule and stripped and not stripped.startswith((' ', '-')) and ':' in stripped:
+            # New top-level key, we're out of the rule
+            if stripped.split(':')[0] not in rule_keywords:
+                in_rule = False
     
     return '\n'.join(fixed_lines)
 
