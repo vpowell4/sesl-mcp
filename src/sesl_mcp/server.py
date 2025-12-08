@@ -78,6 +78,32 @@ def format_error(e: BaseException) -> str:
     return f"{type(e).__name__}: {e}"
 
 
+def _fix_chatgpt_yaml(text: str) -> str:
+    """
+    Fix common YAML formatting issues from ChatGPT output.
+    - Converts bullet points (* or •) to YAML list items (-)
+    - Ensures proper indentation
+    - Preserves quoted strings
+    """
+    lines = text.split('\n')
+    fixed_lines = []
+    
+    for line in lines:
+        # Count leading spaces
+        stripped = line.lstrip()
+        indent = len(line) - len(stripped)
+        
+        # Replace * or • at start of content with -
+        if stripped.startswith('* '):
+            fixed_lines.append(' ' * indent + '- ' + stripped[2:])
+        elif stripped.startswith('• '):
+            fixed_lines.append(' ' * indent + '- ' + stripped[2:])
+        else:
+            fixed_lines.append(line)
+    
+    return '\n'.join(fixed_lines)
+
+
 def _json_fallback(obj: Any):
     if isinstance(obj, set):
         return sorted(list(obj))
@@ -445,6 +471,315 @@ async def run_sesl(
 
 
 # ============================================================
+# TOOL 4: add_model
+# ============================================================
+
+@mcp.tool()
+async def add_model(sesl_yaml: str, name: str = "model", auto_fix: bool = True) -> Dict[str, Any]:
+    """
+    Save SESL model YAML to a file in the current directory.
+    Allows you to paste SESL code directly from ChatGPT and save it.
+    Automatically fixes common ChatGPT formatting issues (bullet points, etc.).
+    
+    Args:
+        sesl_yaml: Complete SESL YAML content (rules, const, etc.)
+        name: Filename (without extension) for the saved model
+        auto_fix: Automatically fix ChatGPT formatting issues (default: true)
+    
+    Returns:
+        Success status and file path, or error details
+    """
+    logger.info("add_model called, name: %s, content length: %d bytes, auto_fix: %s", 
+                name, len(sesl_yaml), auto_fix)
+    
+    if not sesl_yaml or not sesl_yaml.strip():
+        return {
+            "success": False,
+            "error": "Empty SESL content provided",
+            "suggestion": "Please provide valid SESL YAML content"
+        }
+    
+    # Auto-fix ChatGPT formatting issues
+    original_yaml = sesl_yaml
+    if auto_fix:
+        sesl_yaml = _fix_chatgpt_yaml(sesl_yaml)
+        if sesl_yaml != original_yaml:
+            logger.info("add_model: Applied auto-fix for ChatGPT formatting")
+    
+    # Sanitize filename
+    safe_name = "".join(c for c in name if c.isalnum() or c in "._- ").strip()
+    if not safe_name:
+        safe_name = "model"
+    
+    file_path = Path.cwd() / f"{safe_name}.sesl"
+    
+    try:
+        # Validate YAML syntax first
+        logger.debug("add_model: Validating YAML syntax")
+        try:
+            yaml.safe_load(sesl_yaml)
+        except yaml.YAMLError as e:
+            logger.warning("add_model: Invalid YAML syntax: %s", str(e))
+            return {
+                "success": False,
+                "error": "Invalid YAML syntax",
+                "error_type": "YAMLError",
+                "details": str(e),
+                "suggestion": "Check YAML formatting: indentation, colons, dashes"
+            }
+        
+        # Write to file
+        file_path.write_text(sesl_yaml, encoding="utf-8")
+        logger.info("add_model: Saved successfully to %s", file_path)
+        
+        return {
+            "success": True,
+            "file_path": str(file_path),
+            "file_name": file_path.name,
+            "content_length": len(sesl_yaml),
+            "auto_fixed": sesl_yaml != original_yaml,
+            "message": f"SESL model saved to {file_path.name}"
+        }
+        
+    except Exception as e:
+        logger.exception("add_model: Failed to save file")
+        return {
+            "success": False,
+            "error": f"Failed to save file: {format_error(e)}",
+            "error_type": type(e).__name__,
+            "attempted_path": str(file_path)
+        }
+
+
+# ============================================================
+# TOOL 5: add_scenario
+# ============================================================
+
+@mcp.tool()
+async def add_scenario(model_file: str, scenario_yaml: str, auto_fix: bool = True) -> Dict[str, Any]:
+    """
+    Add a scenario (test case) to an existing SESL model file.
+    Allows you to paste scenario YAML directly from ChatGPT.
+    Automatically fixes common ChatGPT formatting issues.
+    
+    Args:
+        model_file: Path to the SESL model file (e.g., "model.sesl")
+        scenario_yaml: YAML content for the scenario (can be dict or list item)
+        auto_fix: Automatically fix ChatGPT formatting issues (default: true)
+    
+    Returns:
+        Success status and updated file info, or error details
+    """
+    logger.info("add_scenario called, model: %s, scenario length: %d bytes, auto_fix: %s", 
+                model_file, len(scenario_yaml), auto_fix)
+    
+    if not scenario_yaml or not scenario_yaml.strip():
+        return {
+            "success": False,
+            "error": "Empty scenario content provided",
+            "suggestion": "Please provide valid scenario YAML"
+        }
+    
+    # Auto-fix ChatGPT formatting issues
+    if auto_fix:
+        scenario_yaml = _fix_chatgpt_yaml(scenario_yaml)
+    
+    # Resolve file path
+    file_path = Path(model_file)
+    if not file_path.is_absolute():
+        file_path = Path.cwd() / model_file
+    
+    if not file_path.exists():
+        return {
+            "success": False,
+            "error": f"Model file not found: {model_file}",
+            "suggestion": "Use add_model first to create the SESL model file",
+            "searched_path": str(file_path)
+        }
+    
+    try:
+        # Load existing model
+        logger.debug("add_scenario: Loading existing model from %s", file_path)
+        existing_content = file_path.read_text(encoding="utf-8")
+        model_data = yaml.safe_load(existing_content)
+        
+        if not isinstance(model_data, dict):
+            return {
+                "success": False,
+                "error": "Invalid model file: root must be a YAML dictionary",
+                "file_path": str(file_path)
+            }
+        
+        # Parse scenario
+        logger.debug("add_scenario: Parsing scenario YAML")
+        try:
+            scenario_data = yaml.safe_load(scenario_yaml.strip())
+        except yaml.YAMLError as e:
+            return {
+                "success": False,
+                "error": "Invalid scenario YAML syntax",
+                "error_type": "YAMLError",
+                "details": str(e),
+                "suggestion": "Check scenario YAML formatting"
+            }
+        
+        # Initialize facts list if it doesn't exist
+        if "facts" not in model_data:
+            model_data["facts"] = []
+            logger.debug("add_scenario: Created new facts list")
+        
+        # Add scenario to facts
+        if isinstance(scenario_data, list):
+            # If already a list, extend
+            model_data["facts"].extend(scenario_data)
+            added_count = len(scenario_data)
+        else:
+            # If single dict, append
+            model_data["facts"].append(scenario_data)
+            added_count = 1
+        
+        # Write back to file
+        updated_yaml = yaml.dump(model_data, default_flow_style=False, sort_keys=False, indent=2)
+        file_path.write_text(updated_yaml, encoding="utf-8")
+        
+        logger.info("add_scenario: Added %d scenario(s) to %s", added_count, file_path)
+        
+        return {
+            "success": True,
+            "file_path": str(file_path),
+            "scenarios_added": added_count,
+            "total_scenarios": len(model_data.get("facts", [])),
+            "message": f"Added {added_count} scenario(s) to {file_path.name}"
+        }
+        
+    except Exception as e:
+        logger.exception("add_scenario: Failed to add scenario")
+        return {
+            "success": False,
+            "error": f"Failed to add scenario: {format_error(e)}",
+            "error_type": type(e).__name__,
+            "file_path": str(file_path)
+        }
+
+
+# ============================================================
+# TOOL 6: add_rule
+# ============================================================
+
+@mcp.tool()
+async def add_rule(model_file: str, rule_yaml: str, auto_fix: bool = True) -> Dict[str, Any]:
+    """
+    Add a rule to an existing SESL model file.
+    Allows you to paste rule YAML directly from ChatGPT.
+    Automatically fixes common ChatGPT formatting issues.
+    
+    Args:
+        model_file: Path to the SESL model file (e.g., "model.sesl")
+        rule_yaml: YAML content for the rule (can be dict or list item)
+        auto_fix: Automatically fix ChatGPT formatting issues (default: true)
+    
+    Returns:
+        Success status and updated file info, or error details
+    """
+    logger.info("add_rule called, model: %s, rule length: %d bytes, auto_fix: %s", 
+                model_file, len(rule_yaml), auto_fix)
+    
+    if not rule_yaml or not rule_yaml.strip():
+        return {
+            "success": False,
+            "error": "Empty rule content provided",
+            "suggestion": "Please provide valid rule YAML"
+        }
+    
+    # Auto-fix ChatGPT formatting issues
+    if auto_fix:
+        rule_yaml = _fix_chatgpt_yaml(rule_yaml)
+    
+    # Resolve file path
+    file_path = Path(model_file)
+    if not file_path.is_absolute():
+        file_path = Path.cwd() / model_file
+    
+    if not file_path.exists():
+        return {
+            "success": False,
+            "error": f"Model file not found: {model_file}",
+            "suggestion": "Use add_model first to create the SESL model file",
+            "searched_path": str(file_path)
+        }
+    
+    try:
+        # Load existing model
+        logger.debug("add_rule: Loading existing model from %s", file_path)
+        existing_content = file_path.read_text(encoding="utf-8")
+        model_data = yaml.safe_load(existing_content)
+        
+        if not isinstance(model_data, dict):
+            return {
+                "success": False,
+                "error": "Invalid model file: root must be a YAML dictionary",
+                "file_path": str(file_path)
+            }
+        
+        # Parse rule
+        logger.debug("add_rule: Parsing rule YAML")
+        try:
+            rule_data = yaml.safe_load(rule_yaml.strip())
+        except yaml.YAMLError as e:
+            return {
+                "success": False,
+                "error": "Invalid rule YAML syntax",
+                "error_type": "YAMLError",
+                "details": str(e),
+                "suggestion": "Check rule YAML formatting"
+            }
+        
+        # Initialize rules list if it doesn't exist
+        if "rules" not in model_data:
+            model_data["rules"] = []
+            logger.debug("add_rule: Created new rules list")
+        
+        # Add rule to rules list
+        if isinstance(rule_data, list):
+            # If already a list, extend
+            model_data["rules"].extend(rule_data)
+            added_count = len(rule_data)
+        elif isinstance(rule_data, dict) and "rule" in rule_data:
+            # Single rule dict
+            model_data["rules"].append(rule_data)
+            added_count = 1
+        else:
+            return {
+                "success": False,
+                "error": "Invalid rule format: must have 'rule' key",
+                "suggestion": "Each rule must have: rule, priority, if, then, because"
+            }
+        
+        # Write back to file
+        updated_yaml = yaml.dump(model_data, default_flow_style=False, sort_keys=False, indent=2)
+        file_path.write_text(updated_yaml, encoding="utf-8")
+        
+        logger.info("add_rule: Added %d rule(s) to %s", added_count, file_path)
+        
+        return {
+            "success": True,
+            "file_path": str(file_path),
+            "rules_added": added_count,
+            "total_rules": len(model_data.get("rules", [])),
+            "message": f"Added {added_count} rule(s) to {file_path.name}"
+        }
+        
+    except Exception as e:
+        logger.exception("add_rule: Failed to add rule")
+        return {
+            "success": False,
+            "error": f"Failed to add rule: {format_error(e)}",
+            "error_type": type(e).__name__,
+            "file_path": str(file_path)
+        }
+
+
+# ============================================================
 # HEALTH CHECK / INFO
 # ============================================================
 
@@ -460,7 +795,7 @@ async def server_info() -> Dict[str, Any]:
         "name": "sesl-mcp-server",
         "version": SERVER_VERSION,
         "status": "running",
-        "tools": ["generate_sesl", "lint_sesl", "run_sesl", "server_info"],
+        "tools": ["generate_sesl", "lint_sesl", "run_sesl", "add_model", "add_scenario", "add_rule", "server_info"],
         "sesl_engine": "https://github.com/vpowell4/sesl",
     }
 
