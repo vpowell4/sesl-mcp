@@ -164,25 +164,41 @@ SESL SPECIFICATION
 
 10. FACTS (Test Scenarios - Optional)
     
-    CORRECT FORMAT - Each scenario is a dictionary in a list:
+    CRITICAL: Each scenario MUST start with 'scenario:' or 'name:' key!
+    
+    CORRECT FORMAT - Each scenario is identified by name:
     
     facts:
-      - age: 25                   # First scenario (flat structure)
+      - scenario: "approved_case"     # Scenario name (required!)
+        age: 25
         country: "US"
         status: "ACTIVE"
-      - age: 16                   # Second scenario
+      - scenario: "rejected_case"     # Second scenario
+        age: 16
         country: "CA"
         status: "INACTIVE"
     
-    OR with nested objects:
+    Alternative using 'name:' key:
     
     facts:
-      - user:                     # First scenario (nested structure)
+      - name: "vip_customer"          # Alternative to 'scenario:'
+        age: 30
+        credit_score: 750
+      - name: "regular_customer"
+        age: 22
+        credit_score: 680
+    
+    With nested data:
+    
+    facts:
+      - scenario: "complex_case"      # Scenario name always first!
+        user:
           age: 25
           country: "US"
         account:
           status: "ACTIVE"
-      - user:                     # Second scenario
+      - scenario: "another_case"
+        user:
           age: 16
           country: "CA"
         account:
@@ -190,14 +206,15 @@ SESL SPECIFICATION
     
     INDENTATION for facts:
       - 'facts:' at column 0 (top level key)
-      - '- age: 25' at column 2 (each scenario starts with dash-space)
-      - '  country: "US"' at column 4 (fields within scenario)
+      - '- scenario: "name"' at column 2 (MUST be first field in scenario)
+      - '  age: 25' at column 4 (data fields after scenario name)
+      - '  country: "US"' at column 4 (other fields)
       - For nested: '  user:' at column 4, then '    age: 25' at column 6
     
     RULES:
+    • REQUIRED: Every scenario must have 'scenario:' or 'name:' as first field
+    • Scenario name must be quoted string
     • Each list item (starting with '-') is one complete test scenario
-    • Use flat structure when possible (simpler)
-    • Use nested structure when rules reference dotted paths (user.age)
     • Defines input fields for rule evaluation
     • Missing dotted paths resolve to None
     • Include only if testing is requested
@@ -312,11 +329,14 @@ rules:
     because: "Standard customer classification"
 
 facts:
-  - age: 30                       # Scenario 1: VIP eligible
+  - scenario: "vip_eligible"          # REQUIRED: scenario name
+    age: 30
     credit_score: 750
-  - age: 22                       # Scenario 2: Regular customer
+  - scenario: "regular_customer"      # Each scenario needs a name
+    age: 22
     credit_score: 680
-  - age: 28                       # Scenario 3: VIP with nested structure
+  - scenario: "young_high_score"      # Can mix simple and nested
+    age: 28
     user:
       age: 28
     credit_score: 720
@@ -329,8 +349,8 @@ INDENTATION RULES TO MEMORIZE:
   - Condition items under 'all/any/not' at column 8 (8 spaces)
   - Field assignments under 'then:' at column 6 (6 spaces)
   - 'facts:' at column 0 (top level)
-  - '- age: 30' at column 2 (each scenario starts with dash-space)
-  - '  credit_score: 750' at column 4 (fields within scenario)
+  - '- scenario: "name"' at column 2 (each scenario starts with scenario/name key)
+  - '  credit_score: 750' at column 4 (data fields within scenario)
   
 ALWAYS use '- ' (dash-space) for list items:
   ✓ rules:

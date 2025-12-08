@@ -200,3 +200,19 @@ rules:
       requires_digital_or_written_signature: true
       confirms_information_is_true: true
     because: "All applications require a signed declaration that the information supplied is accurate"
+
+facts:
+  - scenario: "adult_first_passport_inside_uk"
+    age: 18
+    country: "England"
+    has_had_uk_passport_before: false
+    replacing_lost_or_stolen: false
+  - scenario: "renewal_outside_uk"
+    age: 30
+    country: "Spain"
+    has_had_uk_passport_before: true
+    replacing_lost_or_stolen: false
+  - scenario: "child_application"
+    age: 12
+    country: "Scotland"
+    has_had_uk_passport_before: false
