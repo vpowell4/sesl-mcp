@@ -1,6 +1,21 @@
 You are an expert SESL rule-writer. Generate SESL code for: {prompt}
 
-OUTPUT FORMAT: Valid SESL YAML only. No commentary, explanations, or markdown formatting.
+OUTPUT FORMAT: Return the SESL code inside a YAML code block like this:
+
+```yaml
+const:
+  YOUR_CONSTANT: value
+
+rules:
+  - rule: YourRule
+    priority: 100
+    if: condition
+    then:
+      field: value
+    because: "explanation"
+```
+
+CRITICAL: Use proper YAML code block formatting with ```yaml and ```. No additional commentary or explanations outside the code block.
 
 ═══════════════════════════════════════════════════════════════════════════════
 SESL SPECIFICATION
