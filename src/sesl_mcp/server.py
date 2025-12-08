@@ -22,9 +22,11 @@ SERVER_HOST = os.getenv("SESL_MCP_HOST", "0.0.0.0")
 SERVER_PORT = int(os.getenv("SESL_MCP_PORT", "3000"))
 DEBUG_MODE = os.getenv("SESL_MCP_DEBUG", "true").lower() == "true"
 
-# HTTP request limits (in bytes)
-MAX_REQUEST_SIZE = int(os.getenv("SESL_MCP_MAX_REQUEST_SIZE", str(100 * 1024 * 1024)))  # 100MB default
-REQUEST_TIMEOUT = int(os.getenv("SESL_MCP_TIMEOUT", "300"))  # 5 minutes default
+# HTTP request limits
+DEFAULT_MAX_REQUEST_SIZE = 100 * 1024 * 1024  # 100MB
+DEFAULT_REQUEST_TIMEOUT = 300  # 5 minutes
+MAX_REQUEST_SIZE = int(os.getenv("SESL_MCP_MAX_REQUEST_SIZE", str(DEFAULT_MAX_REQUEST_SIZE)))
+REQUEST_TIMEOUT = int(os.getenv("SESL_MCP_TIMEOUT", str(DEFAULT_REQUEST_TIMEOUT)))
 
 
 # ============================================================
@@ -47,6 +49,7 @@ if not logger.handlers:
 # ============================================================
 
 PROMPT_FILE_NAME = "sesl_prompt.txt"
+SESL_FILE_EXTENSION = ".sesl"
 PROMPT_PATH = Path(__file__).with_name(PROMPT_FILE_NAME)
 
 
@@ -78,6 +81,15 @@ def format_error(e: BaseException) -> str:
     return f"{type(e).__name__}: {e}"
 
 
+def _replace_bullet_with_dash(line: str, stripped: str, indent: int) -> str:
+    """Replace bullet points (* or •) with YAML dash (-) prefix."""
+    BULLETS = ('* ', '• ')
+    for bullet in BULLETS:
+        if stripped.startswith(bullet):
+            return ' ' * indent + '- ' + stripped[len(bullet):]
+    return None
+
+
 def _fix_chatgpt_yaml(text: str) -> str:
     """
     Fix common YAML formatting issues from ChatGPT output.
@@ -86,9 +98,10 @@ def _fix_chatgpt_yaml(text: str) -> str:
     - Adds missing colons after keys
     - Preserves quoted strings
     """
+    RULE_KEYWORDS = ('priority', 'if', 'then', 'because', 'all', 'any', 'not')
+    
     lines = text.split('\n')
     fixed_lines = []
-    prev_indent = 0
     in_rule = False
     
     for i, line in enumerate(lines):
@@ -101,12 +114,10 @@ def _fix_chatgpt_yaml(text: str) -> str:
         stripped = line.lstrip()
         indent = len(line) - len(stripped)
         
-        # Replace * or • at start of content with -
-        if stripped.startswith('* '):
-            fixed_lines.append(' ' * indent + '- ' + stripped[2:])
-            continue
-        elif stripped.startswith('• '):
-            fixed_lines.append(' ' * indent + '- ' + stripped[2:])
+        # Replace bullet points with dashes
+        replaced = _replace_bullet_with_dash(line, stripped, indent)
+        if replaced:
+            fixed_lines.append(replaced)
             continue
         
         # Detect rule keywords that need proper indentation
@@ -120,12 +131,9 @@ def _fix_chatgpt_yaml(text: str) -> str:
             continue
         
         # Fix keys that should have colons but might be missing them
-        # Common rule fields: priority, if, then, because, all, any, not
-        rule_keywords = ['priority', 'if', 'then', 'because', 'all', 'any', 'not']
-        
         if in_rule:
             # Check if line is a rule keyword without a colon
-            for keyword in rule_keywords:
+            for keyword in RULE_KEYWORDS:
                 if stripped == keyword or (stripped.startswith(keyword + ' ') and ':' not in stripped.split()[0]):
                     # Add colon
                     fixed_lines.append(' ' * indent + keyword + ':')
@@ -137,16 +145,31 @@ def _fix_chatgpt_yaml(text: str) -> str:
         # Track if we left a rule block
         if in_rule and stripped and not stripped.startswith((' ', '-')) and ':' in stripped:
             # New top-level key, we're out of the rule
-            if stripped.split(':')[0] not in rule_keywords:
+            if stripped.split(':')[0] not in RULE_KEYWORDS:
                 in_rule = False
     
     return '\n'.join(fixed_lines)
 
 
-def _json_fallback(obj: Any):
+def _json_fallback(obj: Any) -> Any:
+    """JSON serialization fallback for non-standard types."""
     if isinstance(obj, set):
         return sorted(list(obj))
     return str(obj)
+
+
+def _resolve_model_file_path(model_file: str) -> Path:
+    """Resolve model file path, making it absolute if relative."""
+    file_path = Path(model_file)
+    if not file_path.is_absolute():
+        file_path = Path.cwd() / model_file
+    return file_path
+
+
+def _sanitize_filename(name: str, default: str = "model") -> str:
+    """Sanitize filename by removing invalid characters."""
+    safe_name = "".join(c for c in name if c.isalnum() or c in "._- ").strip()
+    return safe_name if safe_name else default
 
 
 def make_text_content(payload: Any) -> TextContent:
@@ -162,12 +185,11 @@ def make_error_content(message: str) -> TextContent:
     return make_text_content({"error": message})
 
 
-def make_detailed_error(error_type: str, message: str, details: Dict[str, Any] = None) -> TextContent:
+def make_detailed_error(error_type: str, message: str, details: Optional[Dict[str, Any]] = None) -> TextContent:
     """Create detailed error response with debugging information."""
     error_data = {
         "error": message,
         "error_type": error_type,
-        "timestamp": str(Path(__file__).parent),  # Using Path as placeholder for datetime
     }
     if details:
         error_data["details"] = details
@@ -546,11 +568,8 @@ async def add_model(sesl_yaml: str, name: str = "model", auto_fix: bool = True) 
             logger.info("add_model: Applied auto-fix for ChatGPT formatting")
     
     # Sanitize filename
-    safe_name = "".join(c for c in name if c.isalnum() or c in "._- ").strip()
-    if not safe_name:
-        safe_name = "model"
-    
-    file_path = Path.cwd() / f"{safe_name}.sesl"
+    safe_name = _sanitize_filename(name)
+    file_path = Path.cwd() / f"{safe_name}{SESL_FILE_EXTENSION}"
     
     try:
         # Validate YAML syntax first
@@ -624,9 +643,7 @@ async def add_scenario(model_file: str, scenario_yaml: str, auto_fix: bool = Tru
         scenario_yaml = _fix_chatgpt_yaml(scenario_yaml)
     
     # Resolve file path
-    file_path = Path(model_file)
-    if not file_path.is_absolute():
-        file_path = Path.cwd() / model_file
+    file_path = _resolve_model_file_path(model_file)
     
     if not file_path.exists():
         return {
@@ -735,9 +752,7 @@ async def add_rule(model_file: str, rule_yaml: str, auto_fix: bool = True) -> Di
         rule_yaml = _fix_chatgpt_yaml(rule_yaml)
     
     # Resolve file path
-    file_path = Path(model_file)
-    if not file_path.is_absolute():
-        file_path = Path.cwd() / model_file
+    file_path = _resolve_model_file_path(model_file)
     
     if not file_path.exists():
         return {
