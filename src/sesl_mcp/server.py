@@ -14,6 +14,16 @@ from sesl.tools.linter_core import lint_model_from_yaml
 
 
 # ============================================================
+# CONFIGURATION
+# ============================================================
+
+SERVER_VERSION = "0.1.0"
+SERVER_HOST = os.getenv("SESL_MCP_HOST", "0.0.0.0")
+SERVER_PORT = int(os.getenv("SESL_MCP_PORT", "3000"))
+DEBUG_MODE = os.getenv("SESL_MCP_DEBUG", "true").lower() == "true"
+
+
+# ============================================================
 # LOGGING SETUP
 # ============================================================
 
@@ -21,8 +31,9 @@ LOGGER_NAME = "sesl-mcp-server"
 logger = logging.getLogger(LOGGER_NAME)
 
 if not logger.handlers:
+    log_level = logging.DEBUG if DEBUG_MODE else logging.INFO
     logging.basicConfig(
-        level=logging.INFO,
+        level=log_level,
         format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
     )
 
@@ -113,8 +124,11 @@ def _normalize_contents(contents: List[Any]) -> str:
 # FASTMCP SERVER SETUP
 # ============================================================
 
-mcp = FastMCP("sesl-mcp-server")
-mcp.debug = True
+mcp = FastMCP(
+    name="sesl-mcp-server",
+    version=SERVER_VERSION,
+)
+mcp.debug = DEBUG_MODE
 
 
 # ============================================================
@@ -123,10 +137,23 @@ mcp.debug = True
 
 @mcp.tool()
 async def generate_sesl(prompt: str) -> str:
+    """
+    Generate a SESL prompt template for converting natural language to SESL YAML.
+    
+    Args:
+        prompt: Natural language description of business rules or policies
+    
+    Returns:
+        Complete prompt template with SESL specification and examples
+    """
     logger.info("generate_sesl called with prompt: %r", prompt)
 
+    if not prompt or not prompt.strip():
+        logger.warning("Empty prompt provided to generate_sesl")
+        return "Error: Prompt cannot be empty"
+
     try:
-        return PROMPT_TEMPLATE.format(prompt=prompt)
+        return PROMPT_TEMPLATE.format(prompt=prompt.strip())
     except Exception:
         logger.exception("Failed to format SESL prompt template")
         return f"Generate SESL code for the prompt: {prompt}"
@@ -138,8 +165,17 @@ async def generate_sesl(prompt: str) -> str:
 
 @mcp.tool()
 async def lint_sesl(contents: List[Any]) -> List[TextContent]:
+    """
+    Validate SESL YAML and return structured error/warning messages.
+    
+    Args:
+        contents: SESL YAML content as list of TextContent, dicts, or strings
+    
+    Returns:
+        List containing TextContent with validation issues (errors/warnings)
+    """
     raw = _normalize_contents(contents)
-    logger.info("lint_sesl called")
+    logger.info("lint_sesl called, content length: %d bytes", len(raw))
 
     try:
         if not raw.strip():
@@ -206,11 +242,21 @@ async def run_sesl(
     contents: List[Any],
     facts: Dict[str, Any],
 ) -> List[TextContent]:
-
+    """
+    Execute SESL rules with provided facts and return computed results.
+    
+    Args:
+        contents: SESL YAML content as list of TextContent, dicts, or strings
+        facts: Input facts/data for rule evaluation (dict or nested structure)
+    
+    Returns:
+        List containing TextContent with execution results or errors
+    """
     raw = _normalize_contents(contents)
     base_facts = _normalize_facts_input(facts)
 
-    logger.info("run_sesl called")
+    logger.info("run_sesl called, content length: %d bytes, facts keys: %s",
+                len(raw), list(base_facts.keys()) if base_facts else [])
 
     if not raw.strip():
         return [make_error_content("Empty SESL")]
@@ -264,7 +310,19 @@ async def run_sesl(
         monitor = Monitor()
         forward_chain(rules, runtime_facts, monitor=monitor)
         result = runtime_facts.get("result", {})
-        return [make_text_content(result)]
+        
+        # Add execution metadata
+        execution_summary = {
+            "result": result,
+            "metadata": {
+                "rules_executed": len(rules),
+                "scenario": scenario_name,
+            }
+        }
+        
+        logger.info("SESL execution completed successfully, %d rules, result keys: %s",
+                   len(rules), list(result.keys()))
+        return [make_text_content(execution_summary)]
 
     except Exception as e:
         logger.exception("Exception during SESL forward chaining")
@@ -272,19 +330,52 @@ async def run_sesl(
 
 
 # ============================================================
+# HEALTH CHECK / INFO
+# ============================================================
+
+@mcp.tool()
+async def server_info() -> Dict[str, Any]:
+    """
+    Get server version and status information.
+    
+    Returns:
+        Dictionary with server version, status, and available tools
+    """
+    return {
+        "name": "sesl-mcp-server",
+        "version": SERVER_VERSION,
+        "status": "running",
+        "tools": ["generate_sesl", "lint_sesl", "run_sesl", "server_info"],
+        "sesl_engine": "https://github.com/vpowell4/sesl",
+    }
+
+
+# ============================================================
 # SERVER ENTRYPOINT
 # ============================================================
 
 def main() -> None:
-    logger.info("🌟 SESL MCP Server Running...\n")
+    logger.info("🌟 SESL MCP Server v%s Starting...", SERVER_VERSION)
+    logger.info("   Host: %s", SERVER_HOST)
+    logger.info("   Port: %s", SERVER_PORT)
+    logger.info("   Debug: %s", DEBUG_MODE)
+    logger.info("   Endpoint: http://%s:%s/mcp\n", 
+                SERVER_HOST if SERVER_HOST != "0.0.0.0" else "localhost", 
+                SERVER_PORT)
 
     os.environ["UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN"] = "0"
 
-    mcp.run(
-        transport="http",
-        host="0.0.0.0",
-        port=3000,
-    )
+    try:
+        mcp.run(
+            transport="http",
+            host=SERVER_HOST,
+            port=SERVER_PORT,
+        )
+    except KeyboardInterrupt:
+        logger.info("Server shutdown requested")
+    except Exception as e:
+        logger.exception("Server failed to start: %s", format_error(e))
+        raise
 
 
 if __name__ == "__main__":

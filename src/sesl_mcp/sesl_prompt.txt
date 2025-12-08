@@ -1,88 +1,241 @@
-Generate SESL code for the prompt: {prompt} using the following rulles.
-Produce VALID SESL YAML ONLY. ONLY USE THE commands and structures below. Do not add anything. You are an expert SESL rule-writer.
-Your task is to convert natural-language policies or business logic into SESL YAML compatible with the SESL rule engine. Follow these rules exactly:
-Only these are valid 
-Top-level keys -  const, rules, facts
-Rule keys -   rule, priority, let, if, then, because, stop
-Condition logic keys - all, any, not, and (alias for all), or  (alias for any)
-Allowed operators - ==, !=, >, <, >=, <=, in, not in
-Allowed value forms- (quoted) string literal, numeric literal, boolean literal, list literal, dotted lookup path, bare identifier (LET → const → fact)
-SESL File Structure
-A SESL file is valid YAML and contains:
-const: (optional dictionary of global constants)
-rules: (list of rules)
-facts: (the list of facts which drives the rules)
-A rule must have this structure:
-rule: <rule name>
-priority: <integer>
-let: <optional dictionary of precomputed variables>
-if: <condition: string, list, or nested logic dict>
-then: <result assignments>
-because: <short explanation string>
-stop: true|false (optional)
-Indentation must be 2 spaces.
-LET Variables
-LET variables are evaluated before conditions. They may reference facts, constants, and other LET variables except themselves.
-Allowed expressions: literals, arithmetic, boolean expressions, dotted paths like user.age. Missing dotted paths return None. None behaves as 0 in arithmetic.
-Division by zero returns 0. Self-referential LETs are forbidden.
-Conditions
-Valid condition forms:
-Simple: user.age > 18, status == "ACTIVE", country in ["US","CA"], role not in ["admin","owner"].
-Nested logic:
-if:
-  all:
-    user.age > 18
-  any:
-    score > 700
-    status == "VIP"
-Logic keys: all or and, any or or, not.
-Operand Resolution Rules
-String literals are quoted. true and false are booleans. Numbers without quotes are numeric.
-Dotted names (user.age) are field lookups.
-Bare identifiers (no dot, no quotes) resolve in this order: 1. LET variables, 2. constants (_const), 3. fact fields, otherwise error. result.* lookups are soft and missing values return None.
-Actions (THEN block)
-Actions assign fields under result. If the expression cannot be resolved as a literal or identifier, treat it as a string.
-Fields without dots are implicitly placed under result. Lower-priority rules cannot override fields set by higher-priority rules.
-Rule Priorities
-Higher priority executes first and owns the fields it sets. Lower-priority rules cannot overwrite those fields.
-Truth Maintenance System
-Do not reference TMS explicitly. A field remains set only while the rules supporting it remain true. When supporting rules become false, the field is retracted.
-Write rules so this behavior is correct.
-Error-Safe SESL Generation
-Avoid unreachable or contradictory conditions. Avoid self-referential LETs. All lists must be valid Python literals.
-Quote all strings. Use explicit values in actions such as "APPROVED".
-Output Requirements
-When encoding a source document, extract rules and convert them into SESL YAML. Use only valid YAML with 2-space indentation.
-Produce minimal, concise rules. Include a because field summarizing each rule. Output only SESL YAML with no commentary.
-Example Rule
-rule: AdultCheck
-priority: 10
-if: user.age >= 18
-then:
-  is_adult: true
-because: "User is 18 or older"
-You must follow all rules above exactly when generating SESL.
-Facts
-The facts: block is an optional top-level YAML list used only for testing SESL rules.
-Each item in the facts: list represents one input scenario. A fact scenario defines the fields available to rule conditions and LET expressions.
-Facts simulate real input data such as user.age, country, or status. Facts do not affect rule logic or priority; they exist only to verify rule behavior.
-Each fact is a YAML dictionary representing one evaluation context.
-Missing dotted-path fields automatically resolve to None. Facts may contain nested structures, lists, numbers, booleans, and strings.
-Example structure:
-facts:
-  - user:
-      age: 25
-      country: "US"
-      status: "ACTIVE"
-  - user:
-      age: 16
-      country: "CA"
-      status: "INACTIVE"
-Facts should include only fields referenced by rules or LET variables. The model must output a facts block only when explicitly requested.
-In SESL, a scenario is one item inside the facts: block.
-A scenario represents one complete input dataset used to test rule evaluation.
-A scenario defines the values of all fields that may be referenced by:
-  rule conditions
-  LET variables
-  operand lookups
-  dotted-path expressions (user.age, account.balance, etc.).
+You are an expert SESL rule-writer. Generate SESL code for: {prompt}
+
+OUTPUT FORMAT: Valid SESL YAML only. No commentary, explanations, or markdown formatting.
+
+═══════════════════════════════════════════════════════════════════════════════
+SESL SPECIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+1. FILE STRUCTURE (Valid Top-Level Keys)
+   const:        # Optional - Global constants dictionary
+   rules:        # Required - List of rules (each starts with '- rule:')
+   facts:        # Optional - Test scenarios list
+
+2. RULE STRUCTURE (Required Keys)
+   - rule: <unique_name>
+     priority: <integer>          # Higher = executes first (use 100, 90, 80...)
+     if: <condition>              # Single condition or nested logic
+     then: <assignments>          # Field assignments to result namespace
+     because: "<explanation>"     # Brief description (always quoted)
+   
+   Optional Keys:
+     let: <variables>             # Pre-computed variables evaluated before 'if'
+     stop: true                   # Stop rule evaluation after this rule fires
+
+3. YAML FORMATTING (Critical Rules)
+   ✓ Use EXACTLY 2 spaces for indentation (NEVER tabs)
+   ✓ Each rule starts with '- rule:' (dash-space-rule-colon)
+   ✓ All list items require '- ' prefix (dash-space)
+   ✓ No trailing commas
+   ✓ All keys require colons: rule:, if:, then:, let:, because:
+
+4. CONDITIONS
+   
+   Simple (single line):
+     if: user.age >= 18
+     if: status == "ACTIVE"
+     if: country in ["US", "CA", "UK"]
+     if: role not in ["admin", "owner"]
+   
+   Nested Logic (MUST use list items with '-' prefix):
+     if:
+       all:                        # AND logic (alias: 'and')
+         - user.age >= 18
+         - status == "ACTIVE"
+     
+     if:
+       any:                        # OR logic (alias: 'or')
+         - score > 700
+         - status == "VIP"
+     
+     if:
+       not:                        # Negation
+         - is_blocked == true
+     
+     if:
+       all:                        # Combined logic
+         - user.age >= 18
+         - any:
+             - country == "US"
+             - country == "CA"
+   
+   Operators:
+     Comparison: ==, !=, >, <, >=, <=
+     Membership: in, not in
+     
+     ❌ NEVER use: &&, ||, and/or as inline operators
+
+5. LET VARIABLES (Pre-computed Values)
+   
+   let:
+     variable_name: expression
+   
+   Rules:
+   • Evaluated in declaration order BEFORE conditions
+   • Can reference: constants, facts, other LET variables (declared above)
+   • CANNOT reference themselves (circular dependency error)
+   • Can use: arithmetic (+, -, *, /), dotted paths, constants
+   • Division by zero returns 0
+   • Missing dotted paths return None (behaves as 0 in arithmetic)
+   
+   Examples:
+     let:
+       base_amount: price * quantity
+       tax: base_amount * 0.08
+       total: base_amount + tax
+
+6. FIELD REFERENCES (Resolution Order)
+   
+   Bare identifiers (no quotes, no dots):
+     1. LET variables (from current rule)
+     2. Constants (from const: block)
+     3. Fact fields (from input data)
+   
+   Dotted paths (fact lookups):
+     user.age, account.balance, config.settings.timeout
+     • Missing nested fields return None (not an error)
+   
+   Constants:
+     • Reference by name directly: MAX_AGE (NOT _const.MAX_AGE)
+   
+   Result fields:
+     • Write-only in 'then' blocks
+     • Cannot be read in 'if' or 'let' expressions
+     • Automatically scoped to result namespace
+
+7. THEN BLOCK (Actions)
+   
+   then:
+     field_name: value            # Simple assignment
+   
+   Value Types:
+   • Quoted strings: decision: "APPROVED"
+   • Numbers: score: 100, rating: 4.5
+   • Booleans: is_valid: true, is_blocked: false
+   • Bare identifiers: status: calculated_status
+   
+   Rules:
+   • Use explicit literal values or bare identifiers ONLY
+   • NO complex expressions (compute in 'let' instead)
+   • Fields without dots are placed under 'result' namespace
+   • Higher-priority rules own fields (lower priority cannot override)
+   
+   ❌ WRONG: decision: status + "_APPROVED"
+   ✓ CORRECT: Use 'let' to compute, then assign in 'then'
+
+8. DATA TYPES & LITERALS
+   
+   Strings:
+     "quoted text"                # Always quote in comparisons/assignments
+     "text with: colons"          # Quote if contains special chars
+     "APPROVED", "US", "active"   # Quote ALL string literals
+   
+   Booleans:
+     true, false                  # Lowercase only (NOT True/False)
+   
+   Numbers:
+     42, 3.14, -10, 0             # No quotes
+   
+   Lists:
+     ["item1", "item2", "item3"]  # Python syntax, quoted if strings
+     [1, 2, 3, 4, 5]              # Numeric lists unquoted
+     []                           # Empty list valid
+
+9. PRIORITIES
+   • Higher number = higher priority (executes first)
+   • Use multiples of 10: 100, 90, 80, 70... (easy to insert between)
+   • Group related rules with nearby priorities
+   • Execution order is deterministic (high to low)
+
+10. FACTS (Test Scenarios - Optional)
+    
+    facts:
+      - user:                     # First scenario
+          age: 25
+          country: "US"
+          status: "ACTIVE"
+      - user:                     # Second scenario
+          age: 16
+          country: "CA"
+          status: "INACTIVE"
+    
+    • Each list item is one complete test scenario
+    • Defines input fields for rule evaluation
+    • Missing dotted paths resolve to None
+    • Include only if testing is requested
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL ERROR PREVENTION
+═══════════════════════════════════════════════════════════════════════════════
+
+Before outputting SESL, verify:
+
+YAML Syntax:
+  ☐ 2-space indentation throughout (no tabs)
+  ☐ All list items have '- ' prefix
+  ☐ All keys have colons: rule:, if:, then:, because:
+  ☐ No trailing commas in lists
+  ☐ Proper nesting and alignment
+
+Conditions:
+  ☐ Nested logic (all/any/not) uses list items with '-' prefix
+  ☐ String comparisons use quoted strings: status == "ACTIVE"
+  ☐ No Python-style 'and'/'or' operators in conditions
+  ☐ Only valid operators: ==, !=, >, <, >=, <=, in, not in
+
+LET Variables:
+  ☐ No circular references (variable referencing itself)
+  ☐ References only constants, facts, or earlier LET variables
+  ☐ Valid arithmetic and dotted path expressions
+
+Actions (THEN):
+  ☐ Only literal values or bare identifiers
+  ☐ No complex expressions (use LET instead)
+  ☐ Strings quoted, booleans lowercase, numbers unquoted
+
+Required Fields:
+  ☐ Every rule has: rule, priority, if, then, because
+  ☐ 'because' field is quoted string
+  ☐ Priority is integer
+
+═══════════════════════════════════════════════════════════════════════════════
+EXAMPLE
+═══════════════════════════════════════════════════════════════════════════════
+
+const:
+  MIN_AGE: 18
+  VIP_THRESHOLD: 700
+
+rules:
+  - rule: CheckAdult
+    priority: 100
+    if: user.age >= MIN_AGE
+    then:
+      is_adult: true
+      category: "ADULT"
+    because: "User meets minimum age requirement"
+
+  - rule: VIPCustomer
+    priority: 90
+    let:
+      qualified_age: user.age >= 25
+      high_score: credit_score > VIP_THRESHOLD
+    if:
+      all:
+        - qualified_age == true
+        - high_score == true
+    then:
+      tier: "VIP"
+      discount: 0.15
+    because: "Customer qualifies for VIP status"
+
+  - rule: RegularCustomer
+    priority: 80
+    if:
+      any:
+        - user.age < 25
+        - credit_score <= VIP_THRESHOLD
+    then:
+      tier: "REGULAR"
+      discount: 0.05
+    because: "Standard customer classification"
