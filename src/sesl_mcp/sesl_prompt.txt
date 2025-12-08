@@ -164,20 +164,44 @@ SESL SPECIFICATION
 
 10. FACTS (Test Scenarios - Optional)
     
+    CORRECT FORMAT - Each scenario is a dictionary in a list:
+    
     facts:
-      - user:                     # First scenario
+      - age: 25                   # First scenario (flat structure)
+        country: "US"
+        status: "ACTIVE"
+      - age: 16                   # Second scenario
+        country: "CA"
+        status: "INACTIVE"
+    
+    OR with nested objects:
+    
+    facts:
+      - user:                     # First scenario (nested structure)
           age: 25
           country: "US"
+        account:
           status: "ACTIVE"
       - user:                     # Second scenario
           age: 16
           country: "CA"
+        account:
           status: "INACTIVE"
     
-    • Each list item is one complete test scenario
+    INDENTATION for facts:
+      - 'facts:' at column 0 (top level key)
+      - '- age: 25' at column 2 (each scenario starts with dash-space)
+      - '  country: "US"' at column 4 (fields within scenario)
+      - For nested: '  user:' at column 4, then '    age: 25' at column 6
+    
+    RULES:
+    • Each list item (starting with '-') is one complete test scenario
+    • Use flat structure when possible (simpler)
+    • Use nested structure when rules reference dotted paths (user.age)
     • Defines input fields for rule evaluation
     • Missing dotted paths resolve to None
     • Include only if testing is requested
+    • Strings in quotes, booleans lowercase, numbers unquoted
 
 ═══════════════════════════════════════════════════════════════════════════════
 CRITICAL ERROR PREVENTION
@@ -287,6 +311,16 @@ rules:
       discount: 0.05
     because: "Standard customer classification"
 
+facts:
+  - age: 30                       # Scenario 1: VIP eligible
+    credit_score: 750
+  - age: 22                       # Scenario 2: Regular customer
+    credit_score: 680
+  - age: 28                       # Scenario 3: VIP with nested structure
+    user:
+      age: 28
+    credit_score: 720
+
 INDENTATION RULES TO MEMORIZE:
   - 'rules:' at column 0 (top level)
   - '- rule: RuleName' at column 2 (2 spaces)
@@ -294,6 +328,9 @@ INDENTATION RULES TO MEMORIZE:
   - 'all:', 'any:', 'not:' at column 6 (6 spaces) when under 'if:'
   - Condition items under 'all/any/not' at column 8 (8 spaces)
   - Field assignments under 'then:' at column 6 (6 spaces)
+  - 'facts:' at column 0 (top level)
+  - '- age: 30' at column 2 (each scenario starts with dash-space)
+  - '  credit_score: 750' at column 4 (fields within scenario)
   
 ALWAYS use '- ' (dash-space) for list items:
   ✓ rules:
